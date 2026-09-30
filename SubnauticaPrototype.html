@@ -1,0 +1,2664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Subnautica — Descent to the Abyss</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #88ccff;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  canvas { display: block; }
+
+  #hud { position: fixed; inset: 0; pointer-events: none; color: #f0f9ff;
+    user-select: none; font-size: 13px; }
+
+  .panel {
+    position: absolute;
+    background: rgba(4, 30, 50, 0.55);
+    border: 1px solid rgba(150, 230, 255, 0.25);
+    backdrop-filter: blur(10px);
+    border-radius: 10px;
+    padding: 12px 18px;
+  }
+
+  #oxygenPanel { bottom: 30px; left: 30px; width: 220px; }
+  #oxygenPanel .label {
+    display: flex; justify-content: space-between; margin-bottom: 6px;
+    letter-spacing: 0.1em; text-transform: uppercase; font-size: 10px; color: #7dd3fc;
+  }
+  #oxygenPanel .label b { color: #e0f2fe; font-variant-numeric: tabular-nums; }
+  #oxygenBar { height: 6px; background: rgba(56, 189, 248, 0.15);
+    border-radius: 99px; overflow: hidden; }
+  #oxygenFill { height: 100%; width: 100%;
+    background: linear-gradient(90deg, #22d3ee, #38bdf8);
+    border-radius: 99px; transition: width 0.2s, background 0.3s; }
+
+  #depthPanel { bottom: 30px; right: 30px; text-align: right; }
+  #depthPanel .label { color: #7dd3fc; font-size: 10px;
+    letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; }
+  #depthPanel b { display: block; font-size: 36px; color: #f0f9ff;
+    font-variant-numeric: tabular-nums; font-weight: 200; line-height: 1; }
+  #depthPanel i { display: block; font-style: normal; font-size: 10px;
+    letter-spacing: 0.15em; text-transform: uppercase; color: #7dd3fc;
+    margin-top: 4px; }
+
+  #modePanel { top: 30px; left: 50%; transform: translateX(-50%);
+    text-align: center; min-width: 200px; }
+  #modePanel span { letter-spacing: 0.3em; text-transform: uppercase;
+    font-size: 11px; color: #bae6fd; display: block; }
+  #modePanel i { display: block; font-style: normal; font-size: 9px;
+    letter-spacing: 0.2em; color: #64748b; margin-top: 4px;
+    text-transform: uppercase; }
+
+  #crosshair {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 22px; height: 22px; pointer-events: none; opacity: 0.75;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ''; position: absolute; background: rgba(240, 249, 255, 0.85);
+    box-shadow: 0 0 4px rgba(56, 189, 248, 0.8);
+  }
+  #crosshair::before { left: 50%; top: 0; width: 1px; height: 100%; transform: translateX(-50%); }
+  #crosshair::after { top: 50%; left: 0; height: 1px; width: 100%; transform: translateY(-50%); }
+
+  #warning {
+    position: fixed; top: 18%; left: 50%; transform: translate(-50%, -50%);
+    color: #ef4444; font-size: 24px; font-weight: 800; letter-spacing: 0.3em;
+    text-transform: uppercase; text-shadow: 0 0 40px rgba(239, 68, 68, 1);
+    opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    white-space: nowrap;
+  }
+  #warning.show { opacity: 1; animation: pulse 0.6s infinite alternate; }
+  @keyframes pulse { from { opacity: 0.5; } to { opacity: 1; } }
+
+  /* BIG MESSAGE — for "WORLD TREE" etc. */
+  #bigMessage {
+    position: fixed; top: 38%; left: 50%; transform: translate(-50%, -50%);
+    font-size: clamp(36px, 7vw, 72px); font-weight: 200;
+    letter-spacing: 0.35em; text-transform: uppercase;
+    color: #86efac; text-shadow: 0 0 60px rgba(134, 239, 172, 0.9), 0 0 120px rgba(134, 239, 172, 0.5);
+    opacity: 0; transition: opacity 1.2s; pointer-events: none;
+    text-align: center; white-space: nowrap;
+  }
+  #bigMessage.show { opacity: 1; }
+
+  #hint {
+    position: fixed; bottom: 110px; left: 50%; transform: translateX(-50%);
+    color: #e0f2fe; font-size: 13px; text-align: center;
+    background: rgba(4, 30, 50, 0.6);
+    border: 1px solid rgba(150, 230, 255, 0.25);
+    padding: 10px 22px; border-radius: 999px; opacity: 0;
+    transition: opacity 0.4s; pointer-events: none; letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+  #hint.show { opacity: 1; }
+
+  /* INVENTORY */
+  #inventory {
+    position: fixed; top: 100px; left: 30px;
+    display: flex; flex-direction: column; gap: 6px;
+    pointer-events: none;
+  }
+  .invRow {
+    background: rgba(4, 30, 50, 0.7);
+    border: 1px solid rgba(134, 239, 172, 0.4);
+    border-radius: 6px; padding: 6px 14px;
+    font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: #86efac;
+    display: none; backdrop-filter: blur(8px);
+    white-space: nowrap;
+  }
+  .invRow.owned { display: block; }
+
+  #oxygenVignette {
+    position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center,
+      rgba(239, 68, 68, 0) 40%, rgba(239, 68, 68, 0.55) 100%);
+    opacity: 0; transition: opacity 0.3s;
+  }
+  #oxygenVignette.show { opacity: 1; animation: vignettePulse 1.2s infinite; }
+  @keyframes vignettePulse { from { opacity: 0.4; } to { opacity: 0.85; } }
+
+  #startScreen {
+    position: fixed; inset: 0; z-index: 50;
+    background: radial-gradient(ellipse at center, #1a4a6e 0%, #000a14 100%);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: #e0f2fe; text-align: center; padding: 24px;
+    transition: opacity 0.8s;
+  }
+  #startScreen.hidden { opacity: 0; pointer-events: none; }
+  #startScreen h1 {
+    font-size: clamp(30px, 6vw, 56px); font-weight: 200;
+    letter-spacing: 0.15em; text-transform: uppercase;
+  }
+  #startScreen h1 span {
+    display: block; font-size: 12px; letter-spacing: 0.8em;
+    margin-top: 16px; color: #38bdf8;
+  }
+  #startScreen p {
+    margin-top: 30px; max-width: 560px; line-height: 1.9;
+    color: #94a3b8; font-size: 14px;
+  }
+  #startScreen p b { color: #7dd3fc; font-weight: 600; }
+
+  #startScreen button, #deathScreen button {
+    cursor: pointer; margin-top: 40px;
+    padding: 16px 56px; font-size: 14px; font-weight: 700;
+    letter-spacing: 0.25em; text-transform: uppercase; color: #001a2c;
+    background: linear-gradient(135deg, #67e8f9, #38bdf8);
+    border: none; border-radius: 999px;
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 0 40px rgba(56, 189, 248, 0.5);
+    font-family: inherit;
+  }
+  #startScreen button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 70px rgba(56, 189, 248, 0.9);
+  }
+
+  #deathScreen {
+    position: fixed; inset: 0; z-index: 60;
+    background: radial-gradient(ellipse at center,
+      rgba(40, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.98) 100%);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    color: #fecaca; text-align: center; padding: 24px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 1.2s;
+  }
+  #deathScreen.show { opacity: 1; pointer-events: auto; }
+  #deathScreen h1 {
+    font-size: clamp(40px, 9vw, 84px); font-weight: 200;
+    letter-spacing: 0.3em; text-transform: uppercase;
+    color: #ef4444;
+    text-shadow: 0 0 40px rgba(239, 68, 68, 0.9);
+  }
+  #deathScreen h1 span {
+    display: block; font-size: 12px; letter-spacing: 0.8em;
+    margin-top: 20px; color: #fca5a5;
+  }
+  #deathScreen p {
+    margin-top: 30px; max-width: 460px; line-height: 1.9;
+    color: #94a3b8; font-size: 14px;
+  }
+  #deathScreen p b { color: #fca5a5; font-weight: 600; }
+  #deathScreen button {
+    background: linear-gradient(135deg, #ef4444, #f87171);
+    color: #1a0000;
+    box-shadow: 0 0 40px rgba(239, 68, 68, 0.6);
+  }
+  #deathScreen button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 70px rgba(239, 68, 68, 1);
+  }
+  #deathScreen .stats {
+    display: flex; gap: 40px; margin-top: 24px;
+    color: #fca5a5; font-size: 13px; letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  #deathScreen .stats div { text-align: center; }
+  #deathScreen .stats b {
+    display: block; font-size: 28px; color: #fee2e2;
+    font-weight: 200; margin-top: 4px; letter-spacing: 0;
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div id="crosshair"></div>
+  <div id="warning">⚠ LEVIATHAN DETECTED ⚠</div>
+  <div id="bigMessage"></div>
+
+  <div class="panel" id="modePanel">
+    <span id="modeText">ON SHORE</span>
+    <i id="biomeText">—</i>
+  </div>
+
+  <div class="panel" id="oxygenPanel">
+    <div class="label"><span>Oxygen</span><b id="oxyVal">100</b></div>
+    <div id="oxygenBar"><div id="oxygenFill"></div></div>
+  </div>
+
+  <div class="panel" id="depthPanel">
+    <div class="label">Depth</div>
+    <b id="depthVal">0</b>
+    <i>meters</i>
+  </div>
+
+  <div id="inventory">
+    <div class="invRow" id="invSuit">🤿 Diving Suit</div>
+    <div class="invRow" id="invOxy">💨 +75% Oxygen</div>
+    <div class="invRow" id="invSword">⚔️ Sword</div>
+    <div class="invRow" id="invCatcher">🐟 Fish Catcher</div>
+  </div>
+
+  <div id="hint"></div>
+</div>
+
+<div id="oxygenVignette"></div>
+
+<div id="startScreen">
+  <h1>DESCENT TO THE ABYSS<span>SUBNAUTICA PROTOTYPE</span></h1>
+  <p>
+    You wash up on an alien shore. The reef is shallow, bright, safe.<br />
+    Beyond it, the ocean floor falls away — 100m, 400m, 1000m.<br />
+    At a thousand meters, something is waiting.<br />
+    Somewhere out there, an ancient tree grows from the sea.<br /><br />
+    <b>WASD</b> swim · <b>Space</b> up · <b>C</b> dive · <b>Shift</b> sprint<br />
+    <b>Click</b> canvas to look · <b>Esc</b> to release mouse
+  </p>
+  <button id="startBtn">DIVE</button>
+</div>
+
+<div id="deathScreen">
+  <h1>DROWNED<span>YOU HAVE PERISHED</span></h1>
+  <p>
+    Your oxygen ran out. The ocean keeps what it takes.<br />
+    <b>Every meter matters.</b>
+  </p>
+  <div class="stats">
+    <div>Max Depth<b id="deathDepth">0m</b></div>
+    <div>Time Survived<b id="deathTime">0s</b></div>
+  </div>
+  <button id="restartBtn">RESURFACE</button>
+</div>
+
+<script type="module">
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+/* ============================================================
+   CONSTANTS
+   ============================================================ */
+const WATER_LEVEL = 0;
+const SHORE_Z = 30;
+const EYE_HEIGHT = 1.65;
+const ABYSS_FLOOR = -1200;
+const LEVIATHAN_TRIGGER_DEPTH = 1000;
+const STRIPED_FISH_TRIGGER_DEPTH = 50;
+const SHARK_TRIGGER_DEPTH = 90;
+const MECHA_TRIGGER_DEPTH = 500;
+const PLAYER_START = new THREE.Vector3(0, 0, 80);
+
+// WORLD TREE ISLAND
+const ISLAND_CX = 100;
+const ISLAND_CZ = -30;
+const ISLAND_RADIUS = 50;
+const ISLAND_PEAK_HEIGHT = 65;
+
+/* ============================================================
+   1. RENDERER / SCENE / CAMERA
+   ============================================================ */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9dd8f0);
+
+const FOG_ABOVE  = new THREE.Color(0xa8dcf0);
+const FOG_SHALLOW= new THREE.Color(0x58c8e0);
+const FOG_MID    = new THREE.Color(0x0a3a5a);
+const FOG_DEEP   = new THREE.Color(0x021224);
+const FOG_ABYSS  = new THREE.Color(0x000308);
+
+scene.fog = new THREE.FogExp2(0xa8dcf0, 0.0025);
+
+const camera = new THREE.PerspectiveCamera(
+  74, window.innerWidth / window.innerHeight, 0.4, 2200
+);
+scene.add(camera); // required so camera children (sword) render
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* ============================================================
+   2. LIGHTS
+   ============================================================ */
+const hemi = new THREE.HemisphereLight(0xbde9ff, 0x3a8fb0, 1.4);
+scene.add(hemi);
+
+const sun = new THREE.DirectionalLight(0xfff4d6, 2.6);
+sun.position.set(60, 200, 40);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -200;
+sun.shadow.camera.right = 200;
+sun.shadow.camera.top = 200;
+sun.shadow.camera.bottom = -200;
+sun.shadow.camera.far = 500;
+sun.shadow.bias = -0.0006;
+scene.add(sun);
+
+const waterFill = new THREE.PointLight(0x60d0e8, 1.0, 200, 2);
+waterFill.position.set(0, -20, -30);
+scene.add(waterFill);
+
+const headlamp = new THREE.SpotLight(0xbce0ff, 0, 120, Math.PI / 4.5, 0.55, 1.4);
+headlamp.castShadow = false;
+scene.add(headlamp);
+scene.add(headlamp.target);
+
+/* ============================================================
+   3. TERRAIN  (with World Tree island blended in)
+   ============================================================ */
+function terrainHeight(x, z) {
+  let h;
+  if (z > SHORE_Z) {
+    const t = Math.min(1, (z - SHORE_Z) / 50);
+    h = -0.3 + t * 5.0;
+  } else {
+    const dist = SHORE_Z - z;
+    if (dist < 80) {
+      const t = dist / 80;
+      h = -0.3 - Math.pow(t, 1.25) * 55;
+    } else if (dist < 260) {
+      const t = (dist - 80) / 180;
+      h = -55 - Math.pow(t, 1.15) * 365;
+    } else if (dist < 520) {
+      const t = (dist - 260) / 260;
+      h = -420 - Math.pow(t, 1.1) * 630;
+    } else {
+      const t = Math.min(1, (dist - 520) / 220);
+      h = -1050 - t * 150;
+    }
+  }
+
+  // --- WORLD TREE ISLAND DOME ---
+  const idx = x - ISLAND_CX;
+  const idz = z - ISLAND_CZ;
+  const id2 = idx * idx + idz * idz;
+  if (id2 < ISLAND_RADIUS * ISLAND_RADIUS) {
+    const idist = Math.sqrt(id2);
+    const t = 1 - idist / ISLAND_RADIUS;
+    // Fast-rising dome with flat top
+    h += Math.pow(t, 0.55) * ISLAND_PEAK_HEIGHT;
+  }
+
+  const detailScale = h > -50 ? 1.0 : (h > -400 ? 2.5 : 6.0);
+  h += Math.sin(x * 0.08 + z * 0.05) * 1.2 * detailScale;
+  h += Math.cos(x * 0.15 - z * 0.12) * 0.6 * detailScale;
+  h += Math.sin(x * 0.35 + 1) * Math.cos(z * 0.28 + 2) * 0.3 * detailScale;
+  h += Math.sin(x * 0.9 + z * 0.7) * 0.4 * detailScale;
+  return h;
+}
+
+const TERRAIN_SIZE = 1600;
+const TERRAIN_SEG = 300;
+
+const terrainGeo = new THREE.PlaneGeometry(
+  TERRAIN_SIZE, TERRAIN_SIZE, TERRAIN_SEG, TERRAIN_SEG
+);
+terrainGeo.rotateX(-Math.PI / 2);
+
+{
+  const pos = terrainGeo.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const h = terrainHeight(x, z);
+    pos.setY(i, h);
+
+    let r, g, b;
+    if (h > 0.5) { r = 0.96; g = 0.88; b = 0.70; }
+    else if (h > -1) {
+      const t = (0.5 - h) / 1.5;
+      r = 0.96 - t * 0.35; g = 0.88 - t * 0.30; b = 0.70 - t * 0.15;
+    } else if (h > -50) {
+      const t = (-1 - h) / 49;
+      r = 0.61 - t * 0.15; g = 0.58 - t * 0.13; b = 0.55 - t * 0.05;
+    } else if (h > -400) {
+      const t = (-50 - h) / 350;
+      r = 0.46 - t * 0.20; g = 0.45 - t * 0.18; b = 0.50 - t * 0.10;
+    } else if (h > -1000) {
+      const t = (-400 - h) / 600;
+      r = 0.26 - t * 0.14; g = 0.27 - t * 0.13; b = 0.40 - t * 0.20;
+    } else {
+      r = 0.10; g = 0.11; b = 0.16;
+    }
+    colors[i * 3] = r;
+    colors[i * 3 + 1] = g;
+    colors[i * 3 + 2] = b;
+  }
+  terrainGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  terrainGeo.computeVertexNormals();
+}
+
+const terrain = new THREE.Mesh(
+  terrainGeo,
+  new THREE.MeshStandardMaterial({
+    vertexColors: true, roughness: 0.92, metalness: 0.02
+  })
+);
+terrain.receiveShadow = true;
+scene.add(terrain);
+
+/* ============================================================
+   4. WATER SURFACE + GLOW
+   ============================================================ */
+const WATER_SIZE = 3000;
+const waterGeo = new THREE.PlaneGeometry(WATER_SIZE, WATER_SIZE, 60, 60);
+waterGeo.rotateX(-Math.PI / 2);
+const waterBasePositions = new Float32Array(waterGeo.attributes.position.array);
+
+const waterMat = new THREE.MeshStandardMaterial({
+  color: 0x6fd8ee,
+  emissive: 0x40c8e0,
+  emissiveIntensity: 0.6,
+  transparent: true,
+  opacity: 0.72,
+  roughness: 0.08,
+  metalness: 0.4,
+  side: THREE.DoubleSide,
+  depthWrite: false
+});
+const water = new THREE.Mesh(waterGeo, waterMat);
+water.position.y = WATER_LEVEL;
+water.renderOrder = 1;
+scene.add(water);
+
+const glowPlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(WATER_SIZE, WATER_SIZE),
+  new THREE.MeshBasicMaterial({
+    color: 0x40c8e8, transparent: true, opacity: 0.16,
+    blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    depthWrite: false
+  })
+);
+glowPlane.rotation.x = -Math.PI / 2;
+glowPlane.position.y = WATER_LEVEL - 0.6;
+scene.add(glowPlane);
+
+/* ============================================================
+   5. ROCKS
+   ============================================================ */
+const rockGeo = new THREE.DodecahedronGeometry(1, 0);
+const rockMats = [
+  new THREE.MeshStandardMaterial({ color: 0x6a7d8a, roughness: 0.95, flatShading: true }),
+  new THREE.MeshStandardMaterial({ color: 0x8a7f6a, roughness: 0.95, flatShading: true }),
+  new THREE.MeshStandardMaterial({ color: 0x5a6d7a, roughness: 0.90, flatShading: true })
+];
+
+for (let i = 0; i < 200; i++) {
+  const angle = Math.random() * Math.PI * 2;
+  const radius = 12 + Math.random() * 250;
+  const x = Math.cos(angle) * radius;
+  const z = Math.sin(angle) * radius - 60;
+  const h = terrainHeight(x, z);
+  if (h > 1.5 || h < -150) continue;
+  // Skip if inside island footprint
+  const idx = x - ISLAND_CX, idz = z - ISLAND_CZ;
+  if (idx * idx + idz * idz < (ISLAND_RADIUS + 5) * (ISLAND_RADIUS + 5)) continue;
+  const s = 0.6 + Math.random() * 3.5;
+  const rock = new THREE.Mesh(rockGeo, rockMats[i % 3]);
+  rock.position.set(x, h + s * 0.35, z);
+  rock.scale.set(s, s * (0.6 + Math.random() * 0.7), s);
+  rock.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+  rock.castShadow = true;
+  rock.receiveShadow = true;
+  scene.add(rock);
+}
+
+const deepRockMat = new THREE.MeshStandardMaterial({
+  color: 0x141c28, roughness: 1.0, flatShading: true
+});
+for (let i = 0; i < 120; i++) {
+  const angle = Math.random() * Math.PI * 2;
+  const radius = 260 + Math.random() * 500;
+  const x = Math.cos(angle) * radius;
+  const z = Math.sin(angle) * radius - 260;
+  const h = terrainHeight(x, z);
+  if (h > -200) continue;
+  const s = 2 + Math.random() * 10;
+  const rock = new THREE.Mesh(rockGeo, deepRockMat);
+  rock.position.set(x, h + s * 0.5, z);
+  rock.scale.set(s, s * (0.6 + Math.random() * 0.8), s);
+  rock.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+  scene.add(rock);
+}
+
+/* ============================================================
+   5b. PROCEDURAL GLOWING CORAL
+   ============================================================ */
+const coralBranchMat = new THREE.MeshStandardMaterial({
+  color: 0x002244, emissive: 0x003366, emissiveIntensity: 1.0,
+  roughness: 0.5, flatShading: true
+});
+const coralTipMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+const CORAL_TIP_GEO = new THREE.SphereGeometry(1, 8, 8);
+const MAX_CORAL_LIGHTS = 12;
+let coralLightCount = 0;
+const _upVec = new THREE.Vector3(0, 1, 0);
+
+function buildCoralBranch(parent, startPos, direction, length, radius, depth) {
+  if (depth === 0 || radius < 0.05) return;
+  const geo = new THREE.CylinderGeometry(radius * 0.7, radius, length, 6);
+  const mesh = new THREE.Mesh(geo, coralBranchMat);
+  mesh.quaternion.setFromUnitVectors(_upVec, direction);
+  mesh.position.copy(startPos).addScaledVector(direction, length / 2);
+  parent.add(mesh);
+  const tipPos = startPos.clone().addScaledVector(direction, length);
+  if (depth === 1) {
+    const tip = new THREE.Mesh(CORAL_TIP_GEO, coralTipMat);
+    tip.scale.setScalar(radius * 1.8);
+    tip.position.copy(tipPos);
+    parent.add(tip);
+    if (coralLightCount < MAX_CORAL_LIGHTS && Math.random() < 0.28) {
+      const pl = new THREE.PointLight(0x00ffff, 0.7, 5, 2);
+      pl.position.copy(tipPos);
+      parent.add(pl);
+      coralLightCount++;
+    }
+    return;
+  }
+  const numChildren = Math.random() > 0.5 ? 3 : 2;
+  for (let i = 0; i < numChildren; i++) {
+    const rnd = new THREE.Vector3(
+      (Math.random() - 0.5) * 1.5,
+      Math.random() * 0.8 + 0.2,
+      (Math.random() - 0.5) * 1.5
+    ).normalize();
+    const newDir = direction.clone().lerp(rnd, 0.6).normalize();
+    buildCoralBranch(parent, tipPos, newDir, length * 0.7, radius * 0.7, depth - 1);
+  }
+}
+
+const coralStalks = [];
+const CORAL_STALK_COUNT = 16;
+for (let i = 0; i < CORAL_STALK_COUNT; i++) {
+  let x, z, h, tries = 0;
+  do {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = 12 + Math.random() * 120;
+    x = Math.cos(angle) * radius;
+    z = -8 - Math.random() * 130;
+    h = terrainHeight(x, z);
+    tries++;
+  } while ((h > -1.5 || h < -45) && tries < 25);
+  if (h > -1.5 || h < -45) continue;
+  const stalk = new THREE.Group();
+  stalk.position.set(x, h, z);
+  const initialDir = new THREE.Vector3(
+    (Math.random() - 0.5) * 0.5, 1, (Math.random() - 0.5) * 0.5
+  ).normalize();
+  const scale = 0.7 + Math.random() * 0.9;
+  buildCoralBranch(stalk, new THREE.Vector3(0, 0, 0), initialDir,
+                   2.0 * scale, 0.3 * scale, 4);
+  coralStalks.push({ group: stalk, phase: Math.random() * Math.PI * 2 });
+  scene.add(stalk);
+}
+
+function updateCorals() {
+  const t = performance.now() * 0.001;
+  for (const s of coralStalks) {
+    s.group.rotation.z = Math.sin(t * 0.5 + s.phase) * 0.06;
+    s.group.rotation.x = Math.cos(t * 0.35 + s.phase) * 0.06;
+  }
+}
+
+/* ============================================================
+   5c. WORLD TREE ISLAND — decorations
+   ============================================================ */
+const worldTreeGroup = new THREE.Group();
+worldTreeGroup.position.set(ISLAND_CX, 0, ISLAND_CZ);
+scene.add(worldTreeGroup);
+
+// Local helper: sample island world-height
+function islandY(tx, tz) {
+  return terrainHeight(ISLAND_CX + tx, ISLAND_CZ + tz);
+}
+
+// Canopy trees — glowing alien green
+const canopyMat = new THREE.MeshStandardMaterial({
+  color: 0x1a5a2a, emissive: 0x0a3a1a, emissiveIntensity: 0.6,
+  roughness: 0.8, flatShading: true
+});
+const trunkMat = new THREE.MeshStandardMaterial({
+  color: 0x3a2418, roughness: 0.9, flatShading: true
+});
+
+const TREE_GEO = new THREE.SphereGeometry(1, 8, 6);
+const TRUNK_GEO = new THREE.CylinderGeometry(0.2, 0.35, 1, 6);
+
+for (let i = 0; i < 220; i++) {
+  const a = Math.random() * Math.PI * 2;
+  const r = Math.sqrt(Math.random()) * ISLAND_RADIUS * 0.95;
+  const tx = Math.cos(a) * r;
+  const tz = Math.sin(a) * r;
+  const wy = islandY(tx, tz);
+  if (wy < 1.5) continue;
+
+  const treeH = 2 + Math.random() * 3;
+  const canopyR = 1.2 + Math.random() * 1.5;
+
+  const trunk = new THREE.Mesh(TRUNK_GEO, trunkMat);
+  trunk.scale.set(1, treeH, 1);
+  trunk.position.set(tx, wy + treeH / 2, tz);
+  trunk.castShadow = true;
+  worldTreeGroup.add(trunk);
+
+  const canopy = new THREE.Mesh(TREE_GEO, canopyMat);
+  canopy.scale.setScalar(canopyR);
+  canopy.position.set(tx, wy + treeH + canopyR * 0.5, tz);
+  canopy.castShadow = true;
+  worldTreeGroup.add(canopy);
+}
+
+// Glowing bioluminescent craters
+const craterMat = new THREE.MeshStandardMaterial({
+  color: 0xff5522, emissive: 0xff2200, emissiveIntensity: 1.8,
+  roughness: 0.4, flatShading: true
+});
+for (let i = 0; i < 14; i++) {
+  const a = Math.random() * Math.PI * 2;
+  const r = Math.random() * ISLAND_RADIUS * 0.75;
+  const tx = Math.cos(a) * r;
+  const tz = Math.sin(a) * r;
+  const wy = islandY(tx, tz);
+  if (wy < 2) continue;
+
+  const crater = new THREE.Mesh(
+    new THREE.SphereGeometry(0.5 + Math.random() * 0.7, 10, 8),
+    craterMat
+  );
+  crater.position.set(tx, wy + 0.3, tz);
+  worldTreeGroup.add(crater);
+
+  const light = new THREE.PointLight(0xff5522, 1.5, 18, 2);
+  light.position.set(tx, wy + 1.8, tz);
+  worldTreeGroup.add(light);
+}
+
+// Mountain peaks ringing the island
+const peakMat = new THREE.MeshStandardMaterial({
+  color: 0x4a2a1e, roughness: 0.9, flatShading: true
+});
+const peakDefs = [
+  { x: -22, z: -14, h: 14, r: 7 },
+  { x: 24, z: 12, h: 16, r: 8 },
+  { x: -14, z: 22, h: 12, r: 6 },
+  { x: 18, z: -22, h: 13, r: 7 },
+];
+for (const p of peakDefs) {
+  const wy = islandY(p.x, p.z);
+  const peak = new THREE.Mesh(new THREE.ConeGeometry(p.r, p.h, 12), peakMat);
+  peak.position.set(p.x, wy + p.h / 2 - 1.5, p.z);
+  peak.castShadow = true;
+  peak.receiveShadow = true;
+  worldTreeGroup.add(peak);
+}
+
+// A huge central "world tree" at the very peak
+const bigTrunk = new THREE.Mesh(
+  new THREE.CylinderGeometry(2.5, 4, 22, 12),
+  trunkMat
+);
+const peakY = islandY(0, 0);
+bigTrunk.position.set(0, peakY + 11, 0);
+bigTrunk.castShadow = true;
+worldTreeGroup.add(bigTrunk);
+
+const bigCanopy = new THREE.Mesh(
+  new THREE.SphereGeometry(12, 16, 12),
+  new THREE.MeshStandardMaterial({
+    color: 0x2a7a3a, emissive: 0x1a4a2a, emissiveIntensity: 0.9,
+    roughness: 0.7, flatShading: true
+  })
+);
+bigCanopy.position.set(0, peakY + 26, 0);
+bigCanopy.castShadow = true;
+worldTreeGroup.add(bigCanopy);
+
+// Light in the great tree
+const treeGlow = new THREE.PointLight(0x86efac, 4, 60, 2);
+treeGlow.position.set(0, peakY + 18, 0);
+worldTreeGroup.add(treeGlow);
+
+/* ============================================================
+   5d. TREASURE CHEST on the island peak
+   ============================================================ */
+const CHEST_WORLD_POS = new THREE.Vector3(
+  ISLAND_CX, terrainHeight(ISLAND_CX, ISLAND_CZ) + 1.2, ISLAND_CZ
+);
+
+function buildChest() {
+  const chest = new THREE.Group();
+
+  const woodMat = new THREE.MeshStandardMaterial({
+    color: 0x5a3018, roughness: 0.8, metalness: 0.1
+  });
+  const goldMat = new THREE.MeshStandardMaterial({
+    color: 0xffcc33, roughness: 0.25, metalness: 1.0,
+    emissive: 0x664400, emissiveIntensity: 0.6
+  });
+
+  // Base
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.0, 1.1), woodMat);
+  base.position.y = 0.5;
+  base.castShadow = true;
+  base.receiveShadow = true;
+  chest.add(base);
+
+  // Lid pivot (at back edge)
+  const lidPivot = new THREE.Group();
+  lidPivot.position.set(0, 1.0, -0.55);
+  chest.add(lidPivot);
+
+  const lid = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.3, 1.1), woodMat);
+  lid.position.set(0, 0.15, 0.55);
+  lid.castShadow = true;
+  lidPivot.add(lid);
+
+  // Gold trims
+  for (const [x, y, z, w, h, d] of [
+    [-0.78, 0.5, 0,    0.06, 1.0, 1.15],
+    [ 0.78, 0.5, 0,    0.06, 1.0, 1.15],
+    [ 0, 0.5,  0.55,   1.6, 0.06, 0.06],
+    [ 0, 0.5, -0.55,   1.6, 0.06, 0.06],
+    [ 0, 1.05, 0,      1.68, 0.06, 0.06],
+  ]) {
+    const t = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), goldMat);
+    t.position.set(x, y, z);
+    chest.add(t);
+  }
+
+  // Lock
+  const lock = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 10), goldMat);
+  lock.position.set(0, 0.7, 0.6);
+  chest.add(lock);
+
+  // Glow light
+  const glowLight = new THREE.PointLight(0xffcc33, 2.5, 20, 2);
+  glowLight.position.set(0, 2.0, 0);
+  chest.add(glowLight);
+
+  return { group: chest, lidPivot, glowLight };
+}
+
+const chestParts = buildChest();
+chestParts.group.position.copy(CHEST_WORLD_POS);
+scene.add(chestParts.group);
+
+/* ============================================================
+   5e. GLOWING SWORD (attached to camera)
+   ============================================================ */
+function buildSword() {
+  const sword = new THREE.Group();
+
+  const steelMat = new THREE.MeshStandardMaterial({
+    color: 0xdddddd, roughness: 0.25, metalness: 1.0,
+    emissive: 0x3366aa, emissiveIntensity: 0.3
+  });
+  const goldMat = new THREE.MeshStandardMaterial({
+    color: 0xffaa00, roughness: 0.3, metalness: 1.0,
+    emissive: 0x442200, emissiveIntensity: 0.5
+  });
+  const gripMat = new THREE.MeshStandardMaterial({
+    color: 0x2a1a10, roughness: 0.9, metalness: 0.1
+  });
+  const glowMat = new THREE.MeshStandardMaterial({
+    color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 3.0,
+    roughness: 0.1
+  });
+  const gemMat = new THREE.MeshStandardMaterial({
+    color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 2.0,
+    roughness: 0.1, metalness: 0.3
+  });
+
+  // Blade (extruded)
+  const bladeShape = new THREE.Shape();
+  bladeShape.moveTo(-0.6, 0);
+  bladeShape.lineTo(0.6, 0);
+  bladeShape.lineTo(0.4, 14);
+  bladeShape.lineTo(0, 16);
+  bladeShape.lineTo(-0.4, 14);
+  bladeShape.lineTo(-0.6, 0);
+  const bladeGeo = new THREE.ExtrudeGeometry(bladeShape, {
+    depth: 0.15, bevelEnabled: true, bevelSegments: 2, steps: 1,
+    bevelSize: 0.05, bevelThickness: 0.05
+  });
+  bladeGeo.translate(0, 2, 0); // lift blade above guard
+  const blade = new THREE.Mesh(bladeGeo, steelMat);
+  blade.castShadow = true;
+  sword.add(blade);
+
+  // Glowing fuller
+  const core = new THREE.Mesh(
+    new THREE.BoxGeometry(0.15, 13, 0.08), glowMat
+  );
+  core.position.set(0, 9, 0.08);
+  sword.add(core);
+
+  // Crossguard
+  const guardCenter = new THREE.Mesh(
+    new THREE.BoxGeometry(1.5, 0.6, 0.6), goldMat
+  );
+  guardCenter.position.set(0, 2, 0);
+  sword.add(guardCenter);
+
+  const wingGeo = new THREE.CylinderGeometry(0.2, 0.4, 2.5, 8);
+  for (const side of [-1, 1]) {
+    const wing = new THREE.Mesh(wingGeo, goldMat);
+    wing.position.set(side * 1.2, 2.3, 0);
+    wing.rotation.z = side * Math.PI / 3;
+    sword.add(wing);
+  }
+
+  // Grip
+  const grip = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.35, 0.3, 3, 12), gripMat
+  );
+  grip.position.set(0, 0.2, 0);
+  sword.add(grip);
+
+  // Gold rings
+  for (let i = 0; i < 3; i++) {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(0.38, 0.05, 6, 12), goldMat
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(0, 1.2 - i * 1.0, 0);
+    sword.add(ring);
+  }
+
+  // Pommel gem
+  const pommel = new THREE.Mesh(new THREE.OctahedronGeometry(0.5), gemMat);
+  pommel.position.set(0, -1.5, 0);
+  sword.add(pommel);
+
+  // Sword's own light
+  const bladeLight = new THREE.PointLight(0x00ffff, 1.2, 5, 2);
+  bladeLight.position.set(0, 9, 0);
+  sword.add(bladeLight);
+
+  return sword;
+}
+
+const swordModel = buildSword();
+swordModel.scale.setScalar(0.045);
+swordModel.position.set(0.55, -0.55, -1.0);
+swordModel.rotation.set(-0.35, 0.55, 0.15);
+swordModel.visible = false;
+camera.add(swordModel);
+
+/* ============================================================
+   6. STYLIZED SHORE FISH
+   ============================================================ */
+const SHORE_PALETTES = [
+  { body: 0xff5500, fin: 0xffaa00, eye: 0x00ffff },
+  { body: 0xff2e63, fin: 0xffb3c1, eye: 0x88ffee },
+  { body: 0x40c4ff, fin: 0xa6e9ff, eye: 0xffe066 },
+  { body: 0xa066ff, fin: 0xd4b3ff, eye: 0x6bffb5 },
+  { body: 0x22dd88, fin: 0xa6ffcc, eye: 0xffd166 },
+  { body: 0xffd166, fin: 0xffe9a8, eye: 0xff5c8a },
+  { body: 0xff7a1a, fin: 0xffc48f, eye: 0x6fd6ff },
+];
+
+function buildStylizedFish(palette) {
+  const group = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: palette.body, flatShading: true, roughness: 0.6,
+    emissive: palette.body, emissiveIntensity: 0.08
+  });
+  const finMat = new THREE.MeshStandardMaterial({
+    color: palette.fin, flatShading: true, side: THREE.DoubleSide,
+    emissive: palette.fin, emissiveIntensity: 0.06
+  });
+  const eyeMat = new THREE.MeshStandardMaterial({
+    color: palette.eye, emissive: palette.eye, emissiveIntensity: 1.6,
+    flatShading: true
+  });
+  const blackMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
+
+  const body = new THREE.Mesh(new THREE.ConeGeometry(1.2, 3.5, 6), bodyMat);
+  body.rotation.x = Math.PI / 2;
+  body.rotation.z = Math.PI;
+  body.castShadow = true;
+  group.add(body);
+
+  const dorsal = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2.5, 4), finMat);
+  dorsal.position.set(0, 1.2, -0.2);
+  dorsal.rotation.x = Math.PI / 6;
+  dorsal.scale.set(1, 1, 0.1);
+  group.add(dorsal);
+
+  const sideFinGeo = new THREE.ConeGeometry(0.6, 2.5, 4);
+  const leftFin = new THREE.Mesh(sideFinGeo, finMat);
+  leftFin.position.set(-1, -0.2, 0);
+  leftFin.rotation.z = Math.PI / 3;
+  leftFin.scale.set(1, 1, 0.1);
+  group.add(leftFin);
+
+  const rightFin = new THREE.Mesh(sideFinGeo, finMat);
+  rightFin.position.set(1, -0.2, 0);
+  rightFin.rotation.z = -Math.PI / 3;
+  rightFin.scale.set(1, 1, 0.1);
+  group.add(rightFin);
+
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(1, 2, 4), finMat);
+  tail.position.set(0, 0, -2);
+  tail.rotation.x = -Math.PI / 2;
+  tail.rotation.z = Math.PI / 4;
+  tail.scale.set(1, 1, 0.1);
+  group.add(tail);
+
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.7, 16, 16), eyeMat);
+  eye.position.set(0, 0, 1.4);
+  group.add(eye);
+
+  const pupil = new THREE.Mesh(
+    new THREE.TorusGeometry(0.25, 0.1, 8, 16), blackMat
+  );
+  pupil.position.set(0, 0, 2.05);
+  pupil.rotation.x = Math.PI / 2;
+  group.add(pupil);
+
+  const secondOrb = new THREE.Mesh(
+    new THREE.SphereGeometry(0.35, 16, 16), eyeMat
+  );
+  secondOrb.position.set(0, -0.3, 0.8);
+  group.add(secondOrb);
+
+  const connector = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05, 0.05, 0.8, 8), bodyMat
+  );
+  connector.position.set(0, -0.15, 1.1);
+  connector.rotation.x = Math.PI / 4;
+  group.add(connector);
+
+  const glow = new THREE.PointLight(palette.eye, 0.35, 4, 2);
+  glow.position.set(0, 0, 1.6);
+  group.add(glow);
+
+  return { group, pupil, glow };
+}
+
+const shoreFishes = [];
+for (let i = 0; i < 28; i++) {
+  const palette = SHORE_PALETTES[i % SHORE_PALETTES.length];
+  const { group, pupil, glow } = buildStylizedFish(palette);
+  const s = 0.55 + Math.random() * 0.5;
+  group.scale.setScalar(s);
+  const angle = Math.random() * Math.PI * 2;
+  const radius = 15 + Math.random() * 130;
+  const x = Math.cos(angle) * radius;
+  const z = -10 - Math.random() * 140;
+  const waterFloor = terrainHeight(x, z);
+  const y = Math.max(waterFloor + 3, -Math.random() * 45 - 3);
+  group.position.set(x, y, z);
+  const heading = Math.random() * Math.PI * 2;
+  group.rotation.y = heading;
+  group.userData = {
+    vel: new THREE.Vector3(Math.sin(heading) * 2, 0, Math.cos(heading) * 2),
+    speed: 1.6 + Math.random() * 1.8,
+    phase: Math.random() * Math.PI * 2,
+    wobble: Math.random() * Math.PI * 2,
+    pupil, glow
+  };
+  scene.add(group);
+  shoreFishes.push(group);
+}
+
+/* ============================================================
+   7. LARGE STRIPED FISH
+   ============================================================ */
+function createStripedTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512; canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#6b5b4b';
+  ctx.fillRect(0, 0, 512, 512);
+  ctx.strokeStyle = '#d97a35';
+  ctx.lineWidth = 12;
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 8; i++) {
+    ctx.beginPath();
+    ctx.moveTo(0, i * 70 + 20);
+    ctx.bezierCurveTo(200, i * 70 + 70, 300, i * 70 - 30, 512, i * 70 + 20);
+    ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(2, 2);
+  return tex;
+}
+const STRIPED_TEX = createStripedTexture();
+const STRIPED_BODY_MAT = new THREE.MeshStandardMaterial({
+  map: STRIPED_TEX, roughness: 0.6, flatShading: true
+});
+const STRIPED_BLUE_FIN_MAT = new THREE.MeshStandardMaterial({
+  color: 0x2a75b8, roughness: 0.5, flatShading: true, side: THREE.DoubleSide
+});
+const STRIPED_DARK_FIN_MAT = new THREE.MeshStandardMaterial({
+  color: 0x3b322a, roughness: 0.8, flatShading: true, side: THREE.DoubleSide
+});
+const STRIPED_EYE_MAT = new THREE.MeshStandardMaterial({
+  color: 0x111111, roughness: 0.1
+});
+
+const STRIPED_BODY_GEO   = new THREE.SphereGeometry(1.5, 16, 16);
+const STRIPED_HEAD_GEO   = new THREE.SphereGeometry(1.3, 16, 16);
+const STRIPED_EYE_GEO    = new THREE.SphereGeometry(0.15, 8, 8);
+const STRIPED_HORN_GEO   = new THREE.CylinderGeometry(0.05, 0.1, 1.2, 6);
+
+const STRIPED_FIN_SHAPE = new THREE.Shape();
+STRIPED_FIN_SHAPE.moveTo(0, 0);
+STRIPED_FIN_SHAPE.quadraticCurveTo(2.5, -1, 3.5, -2.5);
+STRIPED_FIN_SHAPE.quadraticCurveTo(1.5, -3, 0, -1.5);
+STRIPED_FIN_SHAPE.lineTo(0, 0);
+const STRIPED_FIN_GEO = new THREE.ExtrudeGeometry(
+  STRIPED_FIN_SHAPE, { depth: 0.05, bevelEnabled: false }
+);
+
+const STRIPED_DORSAL_SHAPE = new THREE.Shape();
+STRIPED_DORSAL_SHAPE.moveTo(0, 0);
+STRIPED_DORSAL_SHAPE.quadraticCurveTo(0.5, 1.5, 1.5, 1.8);
+STRIPED_DORSAL_SHAPE.quadraticCurveTo(1.0, 0.5, 1.5, 0);
+STRIPED_DORSAL_SHAPE.lineTo(0, 0);
+const STRIPED_DORSAL_GEO = new THREE.ExtrudeGeometry(
+  STRIPED_DORSAL_SHAPE, { depth: 0.05, bevelEnabled: false }
+);
+
+const STRIPED_TAIL_SHAPE = new THREE.Shape();
+STRIPED_TAIL_SHAPE.moveTo(0, 0);
+STRIPED_TAIL_SHAPE.quadraticCurveTo(1.5, 1.5, 2, 0.5);
+STRIPED_TAIL_SHAPE.quadraticCurveTo(1.5, 0, 2, -0.5);
+STRIPED_TAIL_SHAPE.quadraticCurveTo(1.5, -1.5, 0, 0);
+const STRIPED_TAIL_GEO = new THREE.ExtrudeGeometry(
+  STRIPED_TAIL_SHAPE, { depth: 0.05, bevelEnabled: false }
+);
+
+function buildStripedFish() {
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(STRIPED_BODY_GEO, STRIPED_BODY_MAT);
+  body.scale.set(1.1, 1.0, 2.2);
+  body.position.set(0, 0, -0.5);
+  body.castShadow = true;
+  group.add(body);
+
+  const headMesh = new THREE.Mesh(STRIPED_HEAD_GEO, STRIPED_BODY_MAT);
+  headMesh.scale.set(1.3, 1.0, 1.1);
+  headMesh.position.set(0, -0.2, 1.5);
+  headMesh.castShadow = true;
+  group.add(headMesh);
+
+  for (const side of [-1, 1]) {
+    const eye = new THREE.Mesh(STRIPED_EYE_GEO, STRIPED_EYE_MAT);
+    eye.position.set(side * 1.2, 0.3, 1.8);
+    group.add(eye);
+    const horn = new THREE.Mesh(STRIPED_HORN_GEO, STRIPED_DARK_FIN_MAT);
+    horn.position.set(side * 0.4, 1.2, 1.5);
+    horn.rotation.z = -side * 0.3;
+    horn.rotation.x = -0.5;
+    group.add(horn);
+  }
+
+  const lf = new THREE.Mesh(STRIPED_FIN_GEO, STRIPED_BLUE_FIN_MAT);
+  lf.position.set(-1.2, -0.5, 1.0);
+  lf.rotation.set(0.2, -0.5, -0.8);
+  group.add(lf);
+
+  const rf = new THREE.Mesh(STRIPED_FIN_GEO, STRIPED_BLUE_FIN_MAT);
+  rf.position.set(1.2, -0.5, 1.0);
+  rf.rotation.set(0.2, 0.5, 0.8);
+  group.add(rf);
+
+  const dorsalFin = new THREE.Mesh(STRIPED_DORSAL_GEO, STRIPED_DARK_FIN_MAT);
+  dorsalFin.position.set(0, 1.0, -0.5);
+  dorsalFin.rotation.y = Math.PI / 2;
+  group.add(dorsalFin);
+
+  const tailFin = new THREE.Mesh(STRIPED_TAIL_GEO, STRIPED_BLUE_FIN_MAT);
+  tailFin.position.set(0, 0, -3.5);
+  tailFin.rotation.y = Math.PI / 2;
+  tailFin.scale.set(1, 1.5, 1);
+  group.add(tailFin);
+
+  return { group, tailFin };
+}
+
+const stripedFishes = [];
+let stripedFishSpawned = false;
+for (let i = 0; i < 3; i++) {
+  const { group, tailFin } = buildStripedFish();
+  const s = 2.4 + Math.random() * 0.8;
+  group.scale.setScalar(s);
+  group.position.set(0, -100, 0);
+  group.visible = false;
+  group.userData = {
+    vel: new THREE.Vector3(1.2, 0, 0),
+    speed: 1.4 + Math.random() * 0.8,
+    phase: Math.random() * Math.PI * 2,
+    wobble: Math.random() * Math.PI * 2,
+    tailFin, swimPhase: Math.random() * Math.PI * 2
+  };
+  scene.add(group);
+  stripedFishes.push(group);
+}
+function spawnStripedFishes(playerPos) {
+  stripedFishSpawned = true;
+  stripedFishes.forEach((fish, i) => {
+    const angle = (i / stripedFishes.length) * Math.PI * 2 + Math.random() * 0.5;
+    const dist = 30 + Math.random() * 20;
+    const x = playerPos.x + Math.cos(angle) * dist;
+    const z = playerPos.z + Math.sin(angle) * dist;
+    const y = Math.max(-100, Math.min(-10, playerPos.y + (Math.random() - 0.5) * 20));
+    fish.position.set(x, y, z);
+    const heading = Math.random() * Math.PI * 2;
+    fish.rotation.y = heading;
+    fish.userData.vel.set(Math.sin(heading) * 1.2, 0, Math.cos(heading) * 1.2);
+    fish.visible = true;
+  });
+}
+
+/* ============================================================
+   8. LONG BLUE SHARKS (spawn at 90m)
+   ============================================================ */
+function createSharkBodyTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024; canvas.height = 1024;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#0a2a4a';
+  ctx.fillRect(0, 0, 1024, 1024);
+  for (let i = 0; i < 20000; i++) {
+    ctx.fillStyle = Math.random() > 0.5 ? '#143b5e' : '#051829';
+    ctx.fillRect(Math.random() * 1024, Math.random() * 1024, Math.random() * 3, Math.random() * 3);
+  }
+  ctx.strokeStyle = '#00ffff';
+  ctx.lineWidth = 35;
+  ctx.lineCap = 'round';
+  ctx.shadowColor = '#00ffff';
+  ctx.shadowBlur = 25;
+  for (let i = 0; i < 12; i++) {
+    ctx.beginPath();
+    ctx.moveTo(i * 90 + 50, -100);
+    ctx.bezierCurveTo(i * 90 + 150, 300, i * 90 - 50, 700, i * 90 + 50, 1124);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#00ffff';
+  ctx.shadowBlur = 15;
+  for (let i = 0; i < 30; i++) {
+    ctx.beginPath();
+    ctx.ellipse(100 + Math.random() * 800, 100 + Math.random() * 800,
+                15, 8, Math.random() * Math.PI, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(1, 2);
+  return tex;
+}
+const SHARK_BODY_TEX = createSharkBodyTexture();
+const SHARK_BODY_MAT = new THREE.MeshStandardMaterial({
+  map: SHARK_BODY_TEX, roughness: 0.6, metalness: 0.2,
+  emissiveMap: SHARK_BODY_TEX, emissive: new THREE.Color(0x00ffff),
+  emissiveIntensity: 0.4
+});
+const SHARK_FIN_MAT = new THREE.MeshStandardMaterial({
+  color: 0x00aacc, roughness: 0.5, metalness: 0.3,
+  emissive: 0x00aacc, emissiveIntensity: 0.5,
+  side: THREE.DoubleSide, transparent: true, opacity: 0.95
+});
+const SHARK_EYE_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff });
+const SHARK_PUPIL_MAT = new THREE.MeshBasicMaterial({ color: 0x000000 });
+
+const SHARK_BODY_GEO = new THREE.SphereGeometry(1.6, 24, 24);
+const SHARK_HEAD_GEO = new THREE.SphereGeometry(1.4, 24, 24);
+const SHARK_BEAK_GEO = new THREE.ConeGeometry(0.7, 1.5, 16);
+const SHARK_EYE_GEO = new THREE.SphereGeometry(0.15, 12, 12);
+const SHARK_PUPIL_GEO = new THREE.SphereGeometry(0.08, 12, 12);
+
+const SHARK_FIN_SHAPE = new THREE.Shape();
+SHARK_FIN_SHAPE.moveTo(0, 0);
+SHARK_FIN_SHAPE.bezierCurveTo(1.2, -0.3, 2.5, -0.8, 3.2, -2.0);
+SHARK_FIN_SHAPE.bezierCurveTo(2.0, -2.2, 1.0, -1.2, 0, -0.8);
+SHARK_FIN_SHAPE.lineTo(0, 0);
+const SHARK_FIN_GEO = new THREE.ExtrudeGeometry(SHARK_FIN_SHAPE, {
+  depth: 0.1, bevelEnabled: true, bevelSegments: 2, steps: 1,
+  bevelSize: 0.06, bevelThickness: 0.06
+});
+
+const SHARK_DORSAL_SHAPE = new THREE.Shape();
+SHARK_DORSAL_SHAPE.moveTo(0, 0);
+SHARK_DORSAL_SHAPE.bezierCurveTo(1.0, 1.0, 3.0, 1.8, 5.0, 1.2);
+SHARK_DORSAL_SHAPE.bezierCurveTo(4.0, 0.5, 3.0, 0.1, 5.5, 0);
+SHARK_DORSAL_SHAPE.lineTo(0, 0);
+const SHARK_DORSAL_GEO = new THREE.ExtrudeGeometry(SHARK_DORSAL_SHAPE, {
+  depth: 0.08, bevelEnabled: true, bevelSize: 0.04
+});
+
+const SHARK_TAIL_SHAPE = new THREE.Shape();
+SHARK_TAIL_SHAPE.moveTo(0, 0);
+SHARK_TAIL_SHAPE.bezierCurveTo(1.0, 1.8, 2.5, 1.5, 3.5, 0.4);
+SHARK_TAIL_SHAPE.bezierCurveTo(2.0, 0.0, 2.5, -0.8, 3.5, -1.5);
+SHARK_TAIL_SHAPE.bezierCurveTo(2.5, -1.8, 1.0, -1.8, 0, 0);
+const SHARK_TAIL_GEO = new THREE.ExtrudeGeometry(SHARK_TAIL_SHAPE, {
+  depth: 0.1, bevelEnabled: true, bevelSize: 0.05
+});
+
+function buildShark() {
+  const fishGroup = new THREE.Group();
+  const bodyGroup = new THREE.Group();
+  fishGroup.add(bodyGroup);
+
+  const body = new THREE.Mesh(SHARK_BODY_GEO, SHARK_BODY_MAT);
+  body.scale.set(1.1, 0.9, 4.5);
+  body.position.set(0, 0, -1.5);
+  body.castShadow = true;
+  bodyGroup.add(body);
+
+  const headMesh = new THREE.Mesh(SHARK_HEAD_GEO, SHARK_BODY_MAT);
+  headMesh.scale.set(1.2, 1.1, 1.5);
+  headMesh.position.set(0, -0.2, 2.5);
+  headMesh.castShadow = true;
+  bodyGroup.add(headMesh);
+
+  const beak = new THREE.Mesh(SHARK_BEAK_GEO, SHARK_BODY_MAT);
+  beak.rotation.x = Math.PI / 2;
+  beak.rotation.z = Math.PI;
+  beak.position.set(0, -0.8, 3.7);
+  bodyGroup.add(beak);
+
+  for (const side of [-1, 1]) {
+    const eye = new THREE.Mesh(SHARK_EYE_GEO, SHARK_EYE_MAT);
+    eye.position.set(side * 1.3, 0.6, 2.9);
+    bodyGroup.add(eye);
+    const pupil = new THREE.Mesh(SHARK_PUPIL_GEO, SHARK_PUPIL_MAT);
+    pupil.position.set(side * 1.4, 0.6, 3.0);
+    bodyGroup.add(pupil);
+  }
+
+  const leftFin = new THREE.Mesh(SHARK_FIN_GEO, SHARK_FIN_MAT);
+  leftFin.position.set(-1.1, -0.6, 0.8);
+  leftFin.rotation.set(0.4, -0.7, -1.0);
+  bodyGroup.add(leftFin);
+
+  const rightFin = new THREE.Mesh(SHARK_FIN_GEO, SHARK_FIN_MAT);
+  rightFin.position.set(1.1, -0.6, 0.8);
+  rightFin.rotation.set(0.4, 0.7, 1.0);
+  bodyGroup.add(rightFin);
+
+  const dorsalFin = new THREE.Mesh(SHARK_DORSAL_GEO, SHARK_FIN_MAT);
+  dorsalFin.position.set(0, 1.0, -1.5);
+  dorsalFin.rotation.y = Math.PI / 2;
+  bodyGroup.add(dorsalFin);
+
+  const tailGroup = new THREE.Group();
+  tailGroup.position.set(0, 0, -6.0);
+  const tailFin = new THREE.Mesh(SHARK_TAIL_GEO, SHARK_FIN_MAT);
+  tailFin.rotation.y = Math.PI / 2;
+  tailGroup.add(tailFin);
+  bodyGroup.add(tailGroup);
+
+  return { group: fishGroup, leftFin, rightFin, tailGroup };
+}
+
+const sharks = [];
+let sharksSpawned = false;
+for (let i = 0; i < 3; i++) {
+  const { group, leftFin, rightFin, tailGroup } = buildShark();
+  group.scale.setScalar(2.3 + Math.random() * 0.5);
+  group.position.set(0, -300, 0);
+  group.visible = false;
+  group.userData = {
+    vel: new THREE.Vector3(), phase: Math.random() * Math.PI * 2,
+    leftFin, rightFin, tailGroup,
+    state: 'idle', chaseTimer: 0, hitCooldown: 0
+  };
+  scene.add(group);
+  sharks.push(group);
+}
+
+const SHARK_CHASE_SPEED = 16;
+const SHARK_RETREAT_SPEED = 12;
+const SHARK_HIT_DISTANCE = 5.5;
+const SHARK_BASE_DAMAGE = 25;
+const SHARK_MAX_CHASE_SECONDS = 20;
+
+function spawnSharks(playerPos) {
+  sharksSpawned = true;
+  sharks.forEach((shark, i) => {
+    const angle = (i / sharks.length) * Math.PI * 2 + Math.random() * 0.7;
+    const dist = 45 + Math.random() * 25;
+    const x = playerPos.x + Math.cos(angle) * dist;
+    const z = playerPos.z + Math.sin(angle) * dist;
+    const y = Math.max(-260, Math.min(-70, playerPos.y + (Math.random() - 0.5) * 30));
+    shark.position.set(x, y, z);
+    shark.visible = true;
+    Object.assign(shark.userData, { state: 'chase', chaseTimer: SHARK_MAX_CHASE_SECONDS, hitCooldown: 0 });
+    shark.userData.vel.set(0, 0, 0);
+  });
+}
+
+const _sharkToPlayer = new THREE.Vector3();
+const _sharkDir = new THREE.Vector3();
+
+function applyBiteDamage(baseDamage, hintText) {
+  const dmg = STATE.hasDivingSuit ? baseDamage * 0.5 : baseDamage;
+  STATE.oxygen = Math.max(0, STATE.oxygen - dmg);
+  showHint(hintText, 1500);
+}
+
+function updateSharks(dt) {
+  if (!sharksSpawned) return;
+  const t = performance.now() * 0.001;
+
+  for (const shark of sharks) {
+    if (!shark.visible) continue;
+    const ud = shark.userData;
+    ud.phase += dt;
+
+    ud.tailGroup.rotation.y = Math.sin(t * 3 + ud.phase) * 0.5;
+    ud.leftFin.rotation.x = 0.4 + Math.sin(t * 2.5 + ud.phase) * 0.2;
+    ud.rightFin.rotation.x = 0.4 + Math.sin(t * 2.5 + Math.PI + ud.phase) * 0.2;
+
+    if (ud.hitCooldown > 0) ud.hitCooldown -= dt;
+
+    _sharkToPlayer.subVectors(player.position, shark.position);
+    const distToPlayer = _sharkToPlayer.length();
+
+    if (ud.state === 'chase') {
+      const pDepth = Math.max(0, -player.position.y);
+      if (pDepth > 500 || pDepth < 30) ud.state = 'retreat';
+      ud.chaseTimer -= dt;
+      if (ud.chaseTimer <= 0) ud.state = 'retreat';
+
+      if (distToPlayer > 0.01) {
+        _sharkDir.copy(_sharkToPlayer).divideScalar(distToPlayer);
+        ud.vel.lerp(_sharkDir.clone().multiplyScalar(SHARK_CHASE_SPEED), 1 - Math.pow(0.05, dt));
+      }
+      shark.position.addScaledVector(ud.vel, dt);
+
+      if (ud.vel.lengthSq() > 0.05) {
+        const targetYaw = Math.atan2(ud.vel.x, ud.vel.z);
+        let diff = targetYaw - shark.rotation.y;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        shark.rotation.y += diff * Math.min(1, dt * 3.5);
+        shark.rotation.x = -Math.atan2(ud.vel.y, Math.hypot(ud.vel.x, ud.vel.z)) * 0.5;
+      }
+
+      if (distToPlayer < SHARK_HIT_DISTANCE && ud.hitCooldown <= 0) {
+        _sharkDir.copy(_sharkToPlayer).normalize();
+        player.velocity.x += _sharkDir.x * 18;
+        player.velocity.y += _sharkDir.y * 18 + 6;
+        player.velocity.z += _sharkDir.z * 18;
+        SHAKE.amount = 1.0;
+        applyBiteDamage(SHARK_BASE_DAMAGE, '⚠ SHARK BITE — OXYGEN LOST');
+        ud.hitCooldown = 2.0;
+      }
+    } else if (ud.state === 'retreat') {
+      if (distToPlayer > 0.01) {
+        _sharkDir.copy(_sharkToPlayer).divideScalar(distToPlayer).negate();
+        _sharkDir.y += 0.4;
+        _sharkDir.normalize();
+        ud.vel.lerp(_sharkDir.clone().multiplyScalar(SHARK_RETREAT_SPEED), 1 - Math.pow(0.05, dt));
+      }
+      shark.position.addScaledVector(ud.vel, dt);
+      if (distToPlayer > 200) {
+        shark.visible = false;
+        ud.state = 'idle';
+      }
+    }
+  }
+}
+
+/* ============================================================
+   9. MECHANICAL ARMORED FISH (spawn at 500m)
+   ============================================================ */
+const MECHA_RED_MAT = new THREE.MeshStandardMaterial({
+  color: 0xd32f2f, roughness: 0.2, metalness: 0.8,
+  emissive: 0x440000, emissiveIntensity: 0.5
+});
+const MECHA_CYAN_MAT = new THREE.MeshStandardMaterial({
+  color: 0x00e5ff, roughness: 0.1, metalness: 0.9,
+  emissive: 0x00e5ff, emissiveIntensity: 1.0
+});
+const MECHA_GREY_MAT = new THREE.MeshStandardMaterial({
+  color: 0x9e9e9e, roughness: 0.4, metalness: 0.9
+});
+const MECHA_WHITE_MAT = new THREE.MeshStandardMaterial({
+  color: 0xe0e0e0, roughness: 0.3, metalness: 0.6
+});
+const MECHA_DARK_MAT = new THREE.MeshStandardMaterial({
+  color: 0x222222, roughness: 0.5, metalness: 0.5
+});
+
+const MECHA_SEG_GEO = new THREE.CylinderGeometry(1.5, 1.5, 1.8, 16);
+const MECHA_RING_GEO = new THREE.TorusGeometry(1.5, 0.1, 8, 16);
+const MECHA_HEAD_GEO = new THREE.SphereGeometry(1.6, 24, 24);
+const MECHA_SNOUT_GEO = new THREE.ConeGeometry(1.0, 2.0, 16);
+const MECHA_PLATE_GEO = new THREE.BoxGeometry(1.5, 0.2, 1.5);
+const MECHA_EYE_GEO = new THREE.SphereGeometry(0.15, 12, 12);
+const MECHA_COLLAR_RING_GEO = new THREE.TorusGeometry(1.8, 0.1, 8, 32);
+const MECHA_COLLAR_CYAN_GEO = new THREE.TorusGeometry(1.95, 0.05, 8, 32);
+const MECHA_BLADE_GEO = new THREE.ConeGeometry(0.15, 1.0, 4);
+const MECHA_BLADE_TIP_GEO = new THREE.ConeGeometry(0.08, 0.3, 4);
+const MECHA_INNER_BLADE_GEO = new THREE.ConeGeometry(0.1, 0.6, 4);
+const MECHA_DORSAL_BLADE_GEO = new THREE.BoxGeometry(0.2, 3.0, 2.5);
+const MECHA_DORSAL_SLAT_GEO = new THREE.BoxGeometry(0.4, 2.5, 0.4);
+const MECHA_PEC_FIN_GEO = new THREE.BoxGeometry(0.2, 2.0, 3.0);
+const MECHA_PEC_INNER_GEO = new THREE.BoxGeometry(0.1, 1.2, 1.5);
+const MECHA_VENT_FIN_GEO = new THREE.BoxGeometry(0.15, 1.0, 1.5);
+const MECHA_VENT_INNER_GEO = new THREE.BoxGeometry(0.1, 0.6, 0.8);
+const MECHA_TAIL_CONE_GEO = new THREE.ConeGeometry(1.2, 3.0, 16);
+const MECHA_TAIL_FIN_GEO = new THREE.BoxGeometry(0.2, 3.0, 2.0);
+const MECHA_TAIL_INNER_GEO = new THREE.BoxGeometry(0.1, 2.0, 1.0);
+
+function buildMechaFish() {
+  const fishGroup = new THREE.Group();
+  const bodyGroup = new THREE.Group();
+  fishGroup.add(bodyGroup);
+
+  for (let i = 0; i < 4; i++) {
+    const zPos = 2.5 - (i * 2.0);
+    const radius = 1.5 - (i * 0.1);
+    const seg = new THREE.Mesh(MECHA_SEG_GEO, MECHA_RED_MAT);
+    seg.scale.set(radius / 1.5, 1, radius / 1.5);
+    seg.rotation.x = Math.PI / 2;
+    seg.position.set(0, 0, zPos);
+    seg.castShadow = true;
+    bodyGroup.add(seg);
+
+    const ring = new THREE.Mesh(MECHA_RING_GEO, MECHA_GREY_MAT);
+    ring.scale.set(radius / 1.5, radius / 1.5, 1);
+    ring.rotation.y = Math.PI / 2;
+    ring.position.set(0, 0, zPos - 0.9);
+    bodyGroup.add(ring);
+  }
+
+  const headMesh = new THREE.Mesh(MECHA_HEAD_GEO, MECHA_RED_MAT);
+  headMesh.scale.set(1.1, 1.0, 1.2);
+  headMesh.position.set(0, 0, 3.5);
+  headMesh.castShadow = true;
+  bodyGroup.add(headMesh);
+
+  const snout = new THREE.Mesh(MECHA_SNOUT_GEO, MECHA_WHITE_MAT);
+  snout.rotation.x = Math.PI / 2;
+  snout.rotation.z = Math.PI;
+  snout.position.set(0, -0.5, 4.8);
+  bodyGroup.add(snout);
+
+  for (let i = 0; i < 3; i++) {
+    const plate = new THREE.Mesh(MECHA_PLATE_GEO, MECHA_RED_MAT);
+    plate.position.set(0, 1.2 - (i * 0.4), 3.8 + (i * 0.3));
+    plate.rotation.x = 0.2;
+    bodyGroup.add(plate);
+  }
+
+  for (const side of [-1, 1]) {
+    const eye = new THREE.Mesh(MECHA_EYE_GEO, MECHA_DARK_MAT);
+    eye.position.set(side * 1.3, 0.4, 4.2);
+    bodyGroup.add(eye);
+  }
+
+  const headFinGroup = new THREE.Group();
+  headFinGroup.position.set(0, 0, 2.0);
+  const collarRing = new THREE.Mesh(MECHA_COLLAR_RING_GEO, MECHA_RED_MAT);
+  collarRing.rotation.x = Math.PI / 2;
+  headFinGroup.add(collarRing);
+  const collarRingCyan = new THREE.Mesh(MECHA_COLLAR_CYAN_GEO, MECHA_CYAN_MAT);
+  collarRingCyan.rotation.x = Math.PI / 2;
+  headFinGroup.add(collarRingCyan);
+  const collarRadius = 1.8;
+  const numBlades = 12;
+  for (let i = 0; i < numBlades; i++) {
+    const bg = new THREE.Group();
+    bg.rotation.y = (i / numBlades) * Math.PI * 2;
+    const blade = new THREE.Mesh(MECHA_BLADE_GEO, MECHA_RED_MAT);
+    blade.rotation.x = Math.PI / 2;
+    blade.position.set(0, 0, collarRadius + 0.4);
+    bg.add(blade);
+    const tip = new THREE.Mesh(MECHA_BLADE_TIP_GEO, MECHA_CYAN_MAT);
+    tip.rotation.x = Math.PI / 2;
+    tip.position.set(0, 0, collarRadius + 0.9);
+    bg.add(tip);
+    headFinGroup.add(bg);
+  }
+  for (let i = 0; i < numBlades; i++) {
+    const bg = new THREE.Group();
+    bg.rotation.y = (i / numBlades) * Math.PI * 2 + (Math.PI / numBlades);
+    const blade = new THREE.Mesh(MECHA_INNER_BLADE_GEO, MECHA_CYAN_MAT);
+    blade.rotation.x = Math.PI / 2;
+    blade.position.set(0, 0, collarRadius - 0.1);
+    bg.add(blade);
+    headFinGroup.add(bg);
+  }
+  bodyGroup.add(headFinGroup);
+
+  const dorsalGroup = new THREE.Group();
+  dorsalGroup.position.set(0, 1.5, -1.0);
+  const dorsalBlade = new THREE.Mesh(MECHA_DORSAL_BLADE_GEO, MECHA_CYAN_MAT);
+  dorsalBlade.position.set(0, 1.0, 0);
+  dorsalGroup.add(dorsalBlade);
+  for (let i = 0; i < 4; i++) {
+    const slat = new THREE.Mesh(MECHA_DORSAL_SLAT_GEO, MECHA_RED_MAT);
+    slat.position.set(0, 0.5, 1.0 - (i * 0.6));
+    slat.rotation.x = 0.2;
+    dorsalGroup.add(slat);
+  }
+  bodyGroup.add(dorsalGroup);
+
+  const leftFin = new THREE.Mesh(MECHA_PEC_FIN_GEO, MECHA_RED_MAT);
+  leftFin.position.set(-1.5, -0.5, 1.5);
+  leftFin.rotation.set(0, 0.3, 0.5);
+  bodyGroup.add(leftFin);
+  const leftFinInner = new THREE.Mesh(MECHA_PEC_INNER_GEO, MECHA_CYAN_MAT);
+  leftFinInner.position.set(-1.6, -0.8, 1.5);
+  leftFinInner.rotation.set(0, 0.3, 0.5);
+  bodyGroup.add(leftFinInner);
+  const rightFin = new THREE.Mesh(MECHA_PEC_FIN_GEO, MECHA_RED_MAT);
+  rightFin.position.set(1.5, -0.5, 1.5);
+  rightFin.rotation.set(0, -0.3, -0.5);
+  bodyGroup.add(rightFin);
+  const rightFinInner = new THREE.Mesh(MECHA_PEC_INNER_GEO, MECHA_CYAN_MAT);
+  rightFinInner.position.set(1.6, -0.8, 1.5);
+  rightFinInner.rotation.set(0, -0.3, -0.5);
+  bodyGroup.add(rightFinInner);
+
+  for (const side of [-1, 1]) {
+    const v = new THREE.Mesh(MECHA_VENT_FIN_GEO, MECHA_RED_MAT);
+    v.position.set(side * 0.8, -1.5, 0.5);
+    v.rotation.z = -side * 0.3;
+    bodyGroup.add(v);
+    const vi = new THREE.Mesh(MECHA_VENT_INNER_GEO, MECHA_CYAN_MAT);
+    vi.position.set(side * 0.8, -1.8, 0.5);
+    vi.rotation.z = -side * 0.3;
+    bodyGroup.add(vi);
+  }
+
+  const tailGroup = new THREE.Group();
+  tailGroup.position.set(0, 0, -7.5);
+  const tailCone = new THREE.Mesh(MECHA_TAIL_CONE_GEO, MECHA_RED_MAT);
+  tailCone.rotation.x = -Math.PI / 2;
+  tailCone.position.set(0, 0, 1.5);
+  tailGroup.add(tailCone);
+  const tailFin = new THREE.Mesh(MECHA_TAIL_FIN_GEO, MECHA_RED_MAT);
+  tailFin.position.set(0, 0, 3.0);
+  tailGroup.add(tailFin);
+  const tailFinCyan = new THREE.Mesh(MECHA_TAIL_INNER_GEO, MECHA_CYAN_MAT);
+  tailFinCyan.position.set(0, 0, 3.2);
+  tailGroup.add(tailFinCyan);
+  bodyGroup.add(tailGroup);
+
+  return { group: fishGroup, leftFin, leftFinInner, rightFin, rightFinInner,
+           dorsalGroup, headFinGroup, tailGroup };
+}
+
+const mechaFishes = [];
+let mechaSpawned = false;
+for (let i = 0; i < 2; i++) {
+  const parts = buildMechaFish();
+  parts.group.scale.setScalar(2.6 + Math.random() * 0.4);
+  parts.group.position.set(0, -600, 0);
+  parts.group.visible = false;
+  parts.group.userData = {
+    vel: new THREE.Vector3(), phase: Math.random() * Math.PI * 2,
+    state: 'idle', chaseTimer: 0, hitCooldown: 0, parts
+  };
+  scene.add(parts.group);
+  mechaFishes.push(parts.group);
+}
+
+const MECHA_CHASE_SPEED = 20;
+const MECHA_RETREAT_SPEED = 14;
+const MECHA_HIT_DISTANCE = 6.5;
+const MECHA_BASE_DAMAGE = 35;
+const MECHA_MAX_CHASE_SECONDS = 25;
+
+function spawnMechaFishes(playerPos) {
+  mechaSpawned = true;
+  mechaFishes.forEach((fish, i) => {
+    const angle = (i / mechaFishes.length) * Math.PI * 2 + Math.random() * 1.2;
+    const dist = 55 + Math.random() * 20;
+    const x = playerPos.x + Math.cos(angle) * dist;
+    const z = playerPos.z + Math.sin(angle) * dist;
+    const y = Math.max(-700, Math.min(-380, playerPos.y + (Math.random() - 0.5) * 40));
+    fish.position.set(x, y, z);
+    fish.visible = true;
+    Object.assign(fish.userData, { state: 'chase', chaseTimer: MECHA_MAX_CHASE_SECONDS, hitCooldown: 0 });
+    fish.userData.vel.set(0, 0, 0);
+  });
+}
+
+function updateMechaFishes(dt) {
+  if (!mechaSpawned) return;
+  const t = performance.now() * 0.001;
+
+  for (const fish of mechaFishes) {
+    if (!fish.visible) continue;
+    const ud = fish.userData;
+    const p = ud.parts;
+    ud.phase += dt;
+
+    p.headFinGroup.rotation.y = t * 0.8 + ud.phase;
+    p.tailGroup.rotation.y = Math.sin(t * 3 + ud.phase) * 0.2;
+    p.leftFin.rotation.x = Math.sin(t * 2 + ud.phase) * 0.1;
+    p.leftFinInner.rotation.x = Math.sin(t * 2 + ud.phase) * 0.1;
+    p.rightFin.rotation.x = -Math.sin(t * 2 + ud.phase) * 0.1;
+    p.rightFinInner.rotation.x = -Math.sin(t * 2 + ud.phase) * 0.1;
+    p.dorsalGroup.rotation.z = Math.sin(t * 1.5 + ud.phase) * 0.05;
+
+    if (ud.hitCooldown > 0) ud.hitCooldown -= dt;
+
+    _sharkToPlayer.subVectors(player.position, fish.position);
+    const distToPlayer = _sharkToPlayer.length();
+
+    if (ud.state === 'chase') {
+      const pDepth = Math.max(0, -player.position.y);
+      if (pDepth > 950 || pDepth < 200) ud.state = 'retreat';
+      ud.chaseTimer -= dt;
+      if (ud.chaseTimer <= 0) ud.state = 'retreat';
+
+      if (distToPlayer > 0.01) {
+        _sharkDir.copy(_sharkToPlayer).divideScalar(distToPlayer);
+        ud.vel.lerp(_sharkDir.clone().multiplyScalar(MECHA_CHASE_SPEED), 1 - Math.pow(0.05, dt));
+      }
+      fish.position.addScaledVector(ud.vel, dt);
+
+      if (ud.vel.lengthSq() > 0.05) {
+        const targetYaw = Math.atan2(ud.vel.x, ud.vel.z);
+        let diff = targetYaw - fish.rotation.y;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        fish.rotation.y += diff * Math.min(1, dt * 4);
+        fish.rotation.x = -Math.atan2(ud.vel.y, Math.hypot(ud.vel.x, ud.vel.z)) * 0.5;
+      }
+
+      if (distToPlayer < MECHA_HIT_DISTANCE && ud.hitCooldown <= 0) {
+        _sharkDir.copy(_sharkToPlayer).normalize();
+        player.velocity.x += _sharkDir.x * 22;
+        player.velocity.y += _sharkDir.y * 22 + 8;
+        player.velocity.z += _sharkDir.z * 22;
+        SHAKE.amount = 1.3;
+        applyBiteDamage(MECHA_BASE_DAMAGE, '⚠ ARMORED STRIKE — OXYGEN LOST');
+        ud.hitCooldown = 2.5;
+      }
+    } else if (ud.state === 'retreat') {
+      if (distToPlayer > 0.01) {
+        _sharkDir.copy(_sharkToPlayer).divideScalar(distToPlayer).negate();
+        _sharkDir.y += 0.3;
+        _sharkDir.normalize();
+        ud.vel.lerp(_sharkDir.clone().multiplyScalar(MECHA_RETREAT_SPEED), 1 - Math.pow(0.05, dt));
+      }
+      fish.position.addScaledVector(ud.vel, dt);
+      if (distToPlayer > 250) {
+        fish.visible = false;
+        ud.state = 'idle';
+      }
+    }
+  }
+}
+
+/* ============================================================
+   10. DEEP-SEA FISH + JELLIES + SNOW
+   ============================================================ */
+const fishGeo = new THREE.ConeGeometry(0.18, 0.85, 6);
+fishGeo.rotateX(Math.PI / 2);
+const deepFishes = [];
+for (let i = 0; i < 40; i++) {
+  const hue = 0.55 + Math.random() * 0.1;
+  const mat = new THREE.MeshStandardMaterial({
+    color: new THREE.Color().setHSL(hue, 0.3, 0.35),
+    emissive: new THREE.Color().setHSL(hue, 0.3, 0.15),
+    emissiveIntensity: 0.5, roughness: 0.4
+  });
+  const fish = new THREE.Mesh(fishGeo, mat);
+  fish.position.set((Math.random() - 0.5) * 900,
+                    -600 - Math.random() * 500,
+                    -600 - Math.random() * 400);
+  fish.userData = {
+    vel: new THREE.Vector3((Math.random() - 0.5) * 2, 0, (Math.random() - 0.5) * 2),
+    speed: 1.2 + Math.random() * 1.5,
+    phase: Math.random() * Math.PI * 2
+  };
+  scene.add(fish);
+  deepFishes.push(fish);
+}
+
+const jellies = [];
+for (let i = 0; i < 40; i++) {
+  const color = new THREE.Color().setHSL(0.5 + Math.random() * 0.2, 0.9, 0.6);
+  const jelly = new THREE.Mesh(
+    new THREE.SphereGeometry(0.25 + Math.random() * 0.3, 10, 10),
+    new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 0.85,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    })
+  );
+  jelly.position.set((Math.random() - 0.5) * 900,
+                     -700 - Math.random() * 480,
+                     -500 - Math.random() * 500);
+  jelly.userData = {
+    phase: Math.random() * Math.PI * 2,
+    bobSpeed: 0.4 + Math.random() * 0.5,
+    drift: new THREE.Vector3((Math.random() - 0.5) * 0.4, 0, (Math.random() - 0.5) * 0.4)
+  };
+  scene.add(jelly);
+  if (Math.random() > 0.5) {
+    const halo = new THREE.PointLight(color.getHex(), 0.4, 12, 2);
+    jelly.add(halo);
+  }
+  jellies.push(jelly);
+}
+
+const SNOW_COUNT = 3500;
+const snowGeo = new THREE.BufferGeometry();
+const snowPositions = new Float32Array(SNOW_COUNT * 3);
+const snowVelocities = new Float32Array(SNOW_COUNT);
+for (let i = 0; i < SNOW_COUNT; i++) {
+  snowPositions[i * 3] = (Math.random() - 0.5) * 400;
+  snowPositions[i * 3 + 1] = -Math.random() * 1200;
+  snowPositions[i * 3 + 2] = -Math.random() * 800 + 100;
+  snowVelocities[i] = 0.2 + Math.random() * 0.4;
+}
+snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPositions, 3));
+const snowMat = new THREE.PointsMaterial({
+  color: 0xc8f4ff, size: 0.18, transparent: true, opacity: 0.55,
+  depthWrite: false, blending: THREE.AdditiveBlending
+});
+const snow = new THREE.Points(snowGeo, snowMat);
+scene.add(snow);
+
+/* ============================================================
+   11. LEVIATHAN
+   ============================================================ */
+class Leviathan {
+  constructor() {
+    this.group = new THREE.Group();
+    this.group.visible = false;
+    this.spawned = false;
+    this.angle = 0;
+    this.radius = 220;
+    this.speed = 0.09;
+    this.yBase = -1080;
+    this.distToPlayer = 9999;
+    this.state = 'patrol';
+    this.huntTimer = 0;
+
+    const darkMat = new THREE.MeshStandardMaterial({ color: 0x050810, roughness: 0.85, metalness: 0.05 });
+    const skinMat = new THREE.MeshStandardMaterial({ color: 0x101828, roughness: 0.9, emissive: 0x040810, emissiveIntensity: 0.6 });
+
+    const headMesh = new THREE.Mesh(new THREE.SphereGeometry(5, 16, 12), skinMat);
+    headMesh.scale.set(1.7, 0.75, 1.3);
+    headMesh.castShadow = true;
+    this.group.add(headMesh);
+
+    this.mandibles = [];
+    for (let i = 0; i < 4; i++) {
+      const m = new THREE.Group();
+      const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.7, 9, 6), darkMat);
+      arm.position.y = -4.5;
+      arm.rotation.x = Math.PI / 2;
+      m.add(arm);
+      const claw = new THREE.Mesh(new THREE.ConeGeometry(0.7, 2.5, 6), darkMat);
+      claw.position.y = -9;
+      claw.rotation.x = -Math.PI / 2;
+      m.add(claw);
+      const angle = (i / 4) * Math.PI * 2;
+      m.position.set(Math.cos(angle) * 3.5, -1, Math.sin(angle) * 3.5);
+      m.rotation.z = Math.PI / 2;
+      m.rotation.y = angle;
+      this.group.add(m);
+      this.mandibles.push(m);
+    }
+
+    this.segments = [];
+    for (let i = 0; i < 8; i++) {
+      const seg = new THREE.Mesh(
+        new THREE.CapsuleGeometry(3.5 - i * 0.32, 7, 4, 8),
+        new THREE.MeshStandardMaterial({ color: 0x081018, roughness: 0.9, emissive: 0x020408, emissiveIntensity: 0.5 })
+      );
+      seg.position.set(0, 0, 7 + i * 9);
+      seg.rotation.x = Math.PI / 2;
+      seg.castShadow = true;
+      this.group.add(seg);
+      this.segments.push(seg);
+    }
+
+    this.tail = new THREE.Mesh(new THREE.ConeGeometry(1.8, 14, 6), darkMat);
+    this.tail.position.set(0, 0, 78);
+    this.tail.rotation.x = -Math.PI / 2;
+    this.group.add(this.tail);
+
+    this.eyes = [];
+    for (const side of [-1, 1]) {
+      const eye = new THREE.Mesh(
+        new THREE.SphereGeometry(0.8, 10, 10),
+        new THREE.MeshBasicMaterial({ color: 0xff3020 })
+      );
+      eye.position.set(side * 2.8, 1, -5.5);
+      this.group.add(eye);
+      this.eyes.push(eye);
+    }
+
+    this.lures = [];
+    for (let i = 0; i < 4; i++) {
+      const lure = new THREE.Mesh(
+        new THREE.SphereGeometry(0.4, 8, 8),
+        new THREE.MeshBasicMaterial({
+          color: 0x40ffcc, transparent: true, opacity: 0.9,
+          blending: THREE.AdditiveBlending
+        })
+      );
+      const a = (i / 4) * Math.PI * 2;
+      lure.position.set(Math.cos(a) * 3.5, -1, Math.sin(a) * 3.5);
+      this.group.add(lure);
+      this.lures.push(lure);
+    }
+
+    const eyeLight = new THREE.PointLight(0xff2000, 1.5, 50, 2);
+    eyeLight.position.set(0, 1, -6);
+    this.group.add(eyeLight);
+    this.eyeLight = eyeLight;
+
+    this.group.scale.setScalar(2.4);
+    scene.add(this.group);
+  }
+
+  spawn() {
+    if (this.spawned) return;
+    this.spawned = true;
+    this.group.visible = true;
+    this.group.position.set(-200, -1150, -600);
+  }
+
+  reset() {
+    this.spawned = false;
+    this.group.visible = false;
+    this.group.position.set(0, 0, 0);
+    this.angle = 0;
+    this.state = 'patrol';
+    this.huntTimer = 0;
+    this.distToPlayer = 9999;
+  }
+
+  update(dt, playerPos) {
+    if (!this.spawned) return;
+    this.distToPlayer = this.group.position.distanceTo(playerPos);
+
+    this.angle += this.speed * dt;
+    const targetX = Math.cos(this.angle) * this.radius;
+    const targetZ = Math.sin(this.angle) * this.radius - 350;
+    const targetY = this.yBase + Math.sin(this.angle * 1.7) * 40;
+
+    if (this.state === 'patrol') {
+      if (this.distToPlayer < 120 && playerPos.y < -700) {
+        this.state = 'hunt';
+        this.huntTimer = 12;
+      }
+    } else {
+      this.huntTimer -= dt;
+      if (this.huntTimer <= 0 || this.distToPlayer > 260) this.state = 'patrol';
+    }
+
+    if (this.state === 'hunt') {
+      const dir = new THREE.Vector3().subVectors(playerPos, this.group.position);
+      const len = dir.length();
+      if (len > 0.01) dir.divideScalar(len);
+      this.group.position.lerp(
+        this.group.position.clone().addScaledVector(dir, 8 * dt * 4), 1.6 * dt
+      );
+      this.group.lookAt(playerPos);
+    } else {
+      this.group.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), 1.2 * dt);
+    }
+    this.animateBody();
+  }
+
+  animateBody() {
+    const t = performance.now() * 0.001;
+    const mouth = 0.25 + Math.abs(Math.sin(t * 1.4)) * 0.65;
+    for (let i = 0; i < this.mandibles.length; i++) {
+      this.mandibles[i].rotation.x = Math.cos((i / 4) * Math.PI * 2) * mouth;
+    }
+    for (let i = 0; i < this.segments.length; i++) {
+      this.segments[i].position.y = Math.sin(t * 2.2 + i * 0.7) * 1.4;
+    }
+    this.tail.position.y = Math.sin(t * 2.2 + 8 * 0.7) * 1.8;
+
+    const glow = 0.7 + Math.abs(Math.sin(t * 3)) * 0.3;
+    for (const e of this.eyes) e.material.color.setRGB(1, glow * 0.12, glow * 0.04);
+    for (let i = 0; i < this.lures.length; i++) {
+      const a = (i / 4) * Math.PI * 2 + t * 1.5;
+      this.lures[i].position.set(Math.cos(a) * 3.5, -1, Math.sin(a) * 3.5);
+      this.lures[i].material.opacity = 0.6 + Math.abs(Math.sin(t * 4 + i)) * 0.4;
+    }
+    this.eyeLight.intensity = 1.2 + Math.abs(Math.sin(t * 3)) * 1.0;
+  }
+}
+
+const leviathan = new Leviathan();
+
+/* ============================================================
+   12. PLAYER + STATE
+   ============================================================ */
+const player = {
+  position: new THREE.Vector3().copy(PLAYER_START),
+  velocity: new THREE.Vector3(),
+  yaw: 0, pitch: 0, inWater: false, wasInWater: false
+};
+player.position.y = terrainHeight(player.position.x, player.position.z) + EYE_HEIGHT;
+
+const STATE = {
+  oxygen: 100,
+  maxOxygen: 100,
+  depth: 0,
+  running: false,
+  dead: false,
+  sprint: false,
+  maxDepthReached: 0,
+  survivalTime: 0,
+  // World Tree / item flags
+  worldTreeFound: false,
+  chestOpened: false,
+  hasDivingSuit: false,
+  hasFishCatcher: false,
+  hasSword: false
+};
+
+const SHAKE = { amount: 0, decay: 4 };
+
+/* ============================================================
+   13. HUD
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const warningEl = $('warning');
+const hintEl = $('hint');
+const modeText = $('modeText');
+const biomeText = $('biomeText');
+const oxyVal = $('oxyVal');
+const oxygenFill = $('oxygenFill');
+const depthVal = $('depthVal');
+const oxygenVignette = $('oxygenVignette');
+const deathScreen = $('deathScreen');
+const deathDepth = $('deathDepth');
+const deathTime = $('deathTime');
+const bigMessage = $('bigMessage');
+const invSuit = $('invSuit');
+const invOxy = $('invOxy');
+const invSword = $('invSword');
+const invCatcher = $('invCatcher');
+
+let hintTimer = null;
+function showHint(text, ms = 3500) {
+  hintEl.textContent = text;
+  hintEl.classList.add('show');
+  clearTimeout(hintTimer);
+  hintTimer = setTimeout(() => hintEl.classList.remove('show'), ms);
+}
+
+let bigMsgTimer = null;
+function showBigMessage(text, ms = 4000) {
+  bigMessage.textContent = text;
+  bigMessage.classList.add('show');
+  clearTimeout(bigMsgTimer);
+  bigMsgTimer = setTimeout(() => bigMessage.classList.remove('show'), ms);
+}
+
+function biomeName(depth) {
+  if (depth < 2) return 'SHORELINE';
+  if (depth < 60) return 'SHALLOW REEF';
+  if (depth < 200) return 'OPEN WATER';
+  if (depth < 500) return 'DEEP OCEAN';
+  if (depth < 800) return 'MIDNIGHT ZONE';
+  if (depth < 1000) return 'TWILIGHT ZONE';
+  if (depth < 1200) return 'THE ABYSS';
+  return 'VOID';
+}
+
+/* ============================================================
+   14. INPUT
+   ============================================================ */
+const keys = Object.create(null);
+
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') STATE.sprint = true;
+  if (['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','KeyC'].includes(e.code)) {
+    e.preventDefault();
+  }
+});
+
+window.addEventListener('keyup', e => {
+  keys[e.code] = false;
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') STATE.sprint = false;
+});
+
+window.addEventListener('blur', () => {
+  for (const k in keys) keys[k] = false;
+  STATE.sprint = false;
+});
+
+let mouseLocked = false;
+renderer.domElement.addEventListener('click', () => {
+  if (STATE.running && !STATE.dead && !mouseLocked) {
+    renderer.domElement.requestPointerLock();
+  }
+});
+document.addEventListener('pointerlockchange', () => {
+  mouseLocked = document.pointerLockElement === renderer.domElement;
+});
+document.addEventListener('mousemove', e => {
+  if (!mouseLocked) return;
+  player.yaw -= e.movementX * 0.0022;
+  player.pitch -= e.movementY * 0.0022;
+  const limit = Math.PI / 2 - 0.05;
+  player.pitch = Math.max(-limit, Math.min(limit, player.pitch));
+});
+
+/* ============================================================
+   15. DEATH & RESET
+   ============================================================ */
+function triggerDeath() {
+  if (STATE.dead) return;
+  STATE.dead = true;
+  STATE.running = false;
+  if (document.pointerLockElement) document.exitPointerLock();
+
+  deathDepth.textContent = Math.round(STATE.maxDepthReached) + 'm';
+  const secs = Math.floor(STATE.survivalTime);
+  const mins = Math.floor(secs / 60);
+  const rem = secs % 60;
+  deathTime.textContent = mins > 0 ? `${mins}m ${rem}s` : `${secs}s`;
+
+  deathScreen.classList.add('show');
+  warningEl.classList.remove('show');
+  oxygenVignette.classList.remove('show');
+}
+
+function resetGame() {
+  player.position.copy(PLAYER_START);
+  player.position.y = terrainHeight(player.position.x, player.position.z) + EYE_HEIGHT;
+  player.velocity.set(0, 0, 0);
+  player.yaw = 0; player.pitch = 0;
+  player.inWater = false; player.wasInWater = false;
+
+  // Reset items — full fresh run
+  STATE.maxOxygen = 100;
+  STATE.oxygen = 100;
+  STATE.depth = 0;
+  STATE.dead = false;
+  STATE.sprint = false;
+  STATE.maxDepthReached = 0;
+  STATE.survivalTime = 0;
+  STATE.worldTreeFound = false;
+  STATE.chestOpened = false;
+  STATE.hasDivingSuit = false;
+  STATE.hasFishCatcher = false;
+  STATE.hasSword = false;
+
+  swordModel.visible = false;
+  chestParts.lidPivot.rotation.x = 0;
+  chestParts.glowLight.intensity = 2.5;
+
+  invSuit.classList.remove('owned');
+  invOxy.classList.remove('owned');
+  invSword.classList.remove('owned');
+  invCatcher.classList.remove('owned');
+
+  leviathan.reset();
+
+  stripedFishSpawned = false;
+  for (const f of stripedFishes) { f.visible = false; f.position.set(0, -100, 0); }
+
+  sharksSpawned = false;
+  for (const s of sharks) {
+    s.visible = false; s.position.set(0, -300, 0); s.rotation.set(0, 0, 0);
+    Object.assign(s.userData, { state: 'idle', chaseTimer: 0, hitCooldown: 0 });
+    s.userData.vel.set(0, 0, 0);
+  }
+
+  mechaSpawned = false;
+  for (const f of mechaFishes) {
+    f.visible = false; f.position.set(0, -600, 0); f.rotation.set(0, 0, 0);
+    Object.assign(f.userData, { state: 'idle', chaseTimer: 0, hitCooldown: 0 });
+    f.userData.vel.set(0, 0, 0);
+  }
+
+  SHAKE.amount = 0;
+
+  oxygenFill.style.width = '100%';
+  oxygenFill.style.background = 'linear-gradient(90deg,#22d3ee,#38bdf8)';
+  oxyVal.textContent = '100';
+  depthVal.textContent = '0';
+  warningEl.classList.remove('show');
+  bigMessage.classList.remove('show');
+  oxygenVignette.classList.remove('show');
+  deathScreen.classList.remove('show');
+
+  STATE.running = true;
+  showHint('Walk toward the ocean — WASD to move', 5000);
+}
+
+/* ============================================================
+   16. PLAYER UPDATE
+   ============================================================ */
+const _fwd = new THREE.Vector3();
+const _right = new THREE.Vector3();
+const _input = new THREE.Vector3();
+
+const SWIM_H_SPEED   = 12;
+const SWIM_H_SPRINT  = 22;
+const SWIM_V_SPEED   = 18;
+const SWIM_V_SPRINT  = 40;
+const SWIM_FORWARD_SINK = 4.0;
+const SWIM_IDLE_SINK    = 0.0;
+
+function updatePlayer(dt) {
+  STATE.survivalTime += dt;
+
+  const cp = Math.cos(player.pitch);
+  _fwd.set(
+    -Math.sin(player.yaw) * cp,
+    Math.sin(player.pitch),
+    -Math.cos(player.yaw) * cp
+  );
+
+  const fwdFlat = new THREE.Vector3(_fwd.x, 0, _fwd.z).normalize();
+  _right.set(-fwdFlat.z, 0, fwdFlat.x);
+
+  const feetY = player.position.y - EYE_HEIGHT;
+  const shouldSwim = feetY < WATER_LEVEL;
+
+  if (shouldSwim && !player.wasInWater) {
+    showHint('WASD swim · C to dive · Space to rise · Shift sprint', 5000);
+  }
+  player.inWater = shouldSwim;
+  player.wasInWater = shouldSwim;
+
+  if (shouldSwim) {
+    const horiz = new THREE.Vector3();
+    if (keys.KeyW || keys.ArrowUp)    horiz.add(fwdFlat);
+    if (keys.KeyS || keys.ArrowDown)  horiz.sub(fwdFlat);
+    if (keys.KeyD || keys.ArrowRight) horiz.add(_right);
+    if (keys.KeyA || keys.ArrowLeft)  horiz.sub(_right);
+
+    let vert = 0;
+    if (keys.Space) vert += 1;
+    if (keys.KeyC)  vert -= 1;
+
+    const hSpeed = STATE.sprint ? SWIM_H_SPRINT : SWIM_H_SPEED;
+    const vSpeed = STATE.sprint ? SWIM_V_SPRINT : SWIM_V_SPEED;
+
+    const moving = horiz.lengthSq() > 0;
+    if (moving) horiz.normalize();
+
+    let targetVy;
+    if (vert !== 0) targetVy = vert * vSpeed;
+    else if (moving) targetVy = -SWIM_FORWARD_SINK;
+    else targetVy = -SWIM_IDLE_SINK;
+
+    const target = new THREE.Vector3(horiz.x * hSpeed, targetVy, horiz.z * hSpeed);
+    player.velocity.lerp(target, 1 - Math.pow(0.0005, dt));
+    player.position.addScaledVector(player.velocity, dt);
+
+    const gy = terrainHeight(player.position.x, player.position.z);
+    if (player.position.y - EYE_HEIGHT < gy + 0.15) {
+      player.position.y = gy + EYE_HEIGHT + 0.15;
+      if (player.velocity.y < 0) player.velocity.y = 0;
+    }
+    const maxEye = WATER_LEVEL + EYE_HEIGHT - 0.05;
+    if (player.position.y > maxEye) {
+      player.position.y = maxEye;
+      if (player.velocity.y > 0) player.velocity.y = 0;
+    }
+  } else {
+    _input.set(0, 0, 0);
+    if (keys.KeyW || keys.ArrowUp)    _input.add(fwdFlat);
+    if (keys.KeyS || keys.ArrowDown)  _input.sub(fwdFlat);
+    if (keys.KeyD || keys.ArrowRight) _input.add(_right);
+    if (keys.KeyA || keys.ArrowLeft)  _input.sub(_right);
+    if (_input.lengthSq() > 0) _input.normalize();
+
+    const speed = STATE.sprint ? 9 : 5.5;
+    const target = _input.multiplyScalar(speed);
+    player.velocity.x = THREE.MathUtils.lerp(player.velocity.x, target.x, 1 - Math.pow(0.001, dt));
+    player.velocity.z = THREE.MathUtils.lerp(player.velocity.z, target.z, 1 - Math.pow(0.001, dt));
+
+    player.velocity.y -= 25 * dt;
+    player.position.addScaledVector(player.velocity, dt);
+
+    const gy = terrainHeight(player.position.x, player.position.z);
+    if (player.position.y - EYE_HEIGHT < gy) {
+      player.position.y = gy + EYE_HEIGHT;
+      player.velocity.y = 0;
+    }
+  }
+
+  player.position.x = Math.max(-700, Math.min(700, player.position.x));
+  player.position.z = Math.max(-900, Math.min(150, player.position.z));
+  player.position.y = Math.max(-1250, Math.min(WATER_LEVEL + 30, player.position.y));
+
+  STATE.depth = Math.max(0, -player.position.y);
+  if (STATE.depth > STATE.maxDepthReached) STATE.maxDepthReached = STATE.depth;
+  depthVal.textContent = Math.round(STATE.depth);
+
+  // Oxygen
+  if (player.inWater) {
+    let drain = STATE.sprint ? 2.2 : 1.1;
+    if (STATE.depth > 200) drain *= 1 + (STATE.depth / 800) * 1.2;
+    STATE.oxygen = Math.max(0, STATE.oxygen - drain * dt);
+  } else if (player.position.y > -1) {
+    STATE.oxygen = Math.min(STATE.maxOxygen, STATE.oxygen + 25 * dt);
+  }
+
+  const oxyPct = (STATE.oxygen / STATE.maxOxygen) * 100;
+  oxyVal.textContent = Math.round(STATE.oxygen);
+  oxygenFill.style.width = oxyPct + '%';
+  oxygenFill.style.background = oxyPct < 25
+    ? 'linear-gradient(90deg,#ef4444,#f87171)'
+    : 'linear-gradient(90deg,#22d3ee,#38bdf8)';
+
+  if (STATE.oxygen < 30 && player.inWater) oxygenVignette.classList.add('show');
+  else oxygenVignette.classList.remove('show');
+
+  if (STATE.oxygen <= 0 && player.inWater) {
+    triggerDeath();
+    return;
+  }
+
+  if (player.inWater) modeText.textContent = STATE.depth > 10 ? 'DIVING' : 'SWIMMING';
+  else modeText.textContent = 'ON SHORE';
+  biomeText.textContent = biomeName(STATE.depth);
+
+  // Trigger striped fish
+  if (!stripedFishSpawned && STATE.depth >= STRIPED_FISH_TRIGGER_DEPTH) {
+    spawnStripedFishes(player.position);
+    showHint('Large shapes appear in the murk...', 4000);
+  }
+
+  // Trigger sharks
+  if (!sharksSpawned && STATE.depth >= SHARK_TRIGGER_DEPTH) {
+    spawnSharks(player.position);
+    showHint('⚠ SHARKS INBOUND', 3000);
+  }
+
+  // Trigger mecha fish
+  if (!mechaSpawned && STATE.depth >= MECHA_TRIGGER_DEPTH) {
+    spawnMechaFishes(player.position);
+    showHint('⚠ MECHANICAL SIGNATURE DETECTED', 4000);
+  }
+
+  // Trigger leviathan
+  if (STATE.depth >= LEVIATHAN_TRIGGER_DEPTH && !leviathan.spawned) {
+    leviathan.spawn();
+    showHint('⚠ SOMETHING ENORMOUS IS DOWN HERE', 5000);
+  }
+
+  // ============================================================
+  // WORLD TREE detection
+  // ============================================================
+  const dxI = player.position.x - ISLAND_CX;
+  const dzI = player.position.z - ISLAND_CZ;
+  const dIsland = Math.sqrt(dxI * dxI + dzI * dzI);
+
+  if (!STATE.worldTreeFound && dIsland < 65) {
+    STATE.worldTreeFound = true;
+    showBigMessage('WORLD TREE', 5000);
+    setTimeout(() => {
+      showHint('A chest rests at its roots', 4000);
+    }, 1500);
+  }
+
+  // ============================================================
+  // CHEST detection — open & grant loot
+  // ============================================================
+  if (!STATE.chestOpened) {
+    const dcx = player.position.x - CHEST_WORLD_POS.x;
+    const dcy = player.position.y - CHEST_WORLD_POS.y;
+    const dcz = player.position.z - CHEST_WORLD_POS.z;
+    const dChest = Math.sqrt(dcx * dcx + dcy * dcy + dcz * dcz);
+    if (dChest < 4.5) {
+      STATE.chestOpened = true;
+
+      // Grant items
+      STATE.hasDivingSuit = true;
+      STATE.hasFishCatcher = true;
+      STATE.hasSword = true;
+      STATE.maxOxygen = 175;
+      STATE.oxygen = 175;
+
+      // Update HUD
+      invSuit.classList.add('owned');
+      invOxy.classList.add('owned');
+      invSword.classList.add('owned');
+      invCatcher.classList.add('owned');
+
+      // Show sword
+      swordModel.visible = true;
+
+      // Big messages
+      showBigMessage('CHEST OPENED', 2500);
+      setTimeout(() => {
+        showHint('🤿 Diving Suit · 💨 +75% Oxygen · ⚔️ Sword · 🐟 Fish Catcher', 6000);
+      }, 2500);
+    }
+  }
+
+  // Animate chest lid opening
+  if (STATE.chestOpened && chestParts.lidPivot.rotation.x > -Math.PI * 0.55) {
+    chestParts.lidPivot.rotation.x -= dt * 2.5;
+    if (chestParts.lidPivot.rotation.x < -Math.PI * 0.55) {
+      chestParts.lidPivot.rotation.x = -Math.PI * 0.55;
+    }
+    // Pulse glow down
+    chestParts.glowLight.intensity = 2.5 + Math.sin(performance.now() * 0.005) * 0.5;
+  }
+}
+
+/* ============================================================
+   17. CAMERA
+   ============================================================ */
+function updateCamera(dt) {
+  camera.position.copy(player.position);
+
+  if (!player.inWater) {
+    const t = performance.now() * 0.008;
+    const moving = player.velocity.lengthSq() > 1;
+    if (moving) camera.position.y += Math.sin(t) * 0.05;
+  } else {
+    const t = performance.now() * 0.001;
+    camera.position.y += Math.sin(t * 1.3) * 0.06;
+  }
+
+  if (SHAKE.amount > 0) {
+    const s = SHAKE.amount;
+    camera.position.x += (Math.random() - 0.5) * 1.2 * s;
+    camera.position.y += (Math.random() - 0.5) * 1.2 * s;
+    camera.position.z += (Math.random() - 0.5) * 1.2 * s;
+    SHAKE.amount = Math.max(0, SHAKE.amount - dt * SHAKE.decay);
+  }
+
+  const lookAt = camera.position.clone().add(_fwd.clone().multiplyScalar(10));
+  camera.lookAt(lookAt);
+
+  if (player.inWater) {
+    const t = performance.now() * 0.001;
+    camera.rotation.z += Math.sin(t * 0.8) * 0.012;
+  }
+
+  // Sword sway — subtle bob when swimming
+  if (STATE.hasSword && swordModel.visible) {
+    const t = performance.now() * 0.001;
+    const moving = player.velocity.lengthSq() > 1;
+    if (moving) {
+      swordModel.position.y = -0.55 + Math.sin(t * 6) * 0.02;
+      swordModel.rotation.z = 0.15 + Math.sin(t * 6) * 0.03;
+    } else {
+      swordModel.position.y = -0.55;
+      swordModel.rotation.z = 0.15;
+    }
+  }
+
+  headlamp.position.copy(camera.position);
+  headlamp.target.position.copy(camera.position).add(_fwd.clone().multiplyScalar(20));
+  const lampStrength = THREE.MathUtils.clamp((STATE.depth - 30) / 200, 0, 1);
+  headlamp.intensity = lampStrength * 3.0;
+}
+
+/* ============================================================
+   18. ENVIRONMENT
+   ============================================================ */
+const _c1 = new THREE.Color();
+
+function updateEnvironment(dt) {
+  const camY = camera.position.y;
+  const underwater = camY < WATER_LEVEL;
+  const depth = STATE.depth;
+
+  let fogColor;
+  if (!underwater) fogColor = FOG_ABOVE;
+  else if (depth < 60) fogColor = _c1.copy(FOG_SHALLOW).lerp(FOG_MID, (depth / 60) * 0.4);
+  else if (depth < 300) fogColor = _c1.copy(FOG_SHALLOW).lerp(FOG_MID, 0.4 + ((depth - 60) / 240) * 0.6);
+  else if (depth < 700) fogColor = _c1.copy(FOG_MID).lerp(FOG_DEEP, (depth - 300) / 400);
+  else fogColor = _c1.copy(FOG_DEEP).lerp(FOG_ABYSS, Math.min(1, (depth - 700) / 500));
+
+  scene.fog.color.copy(fogColor);
+  scene.background.copy(fogColor);
+
+  if (!underwater) scene.fog.density = 0.0025;
+  else scene.fog.density = 0.007 + Math.min(1, depth / 1000) * 0.020;
+
+  sun.intensity = 2.6 * Math.exp(-depth / 250);
+  sun.color.setHSL(0.12, 0.4 - depth * 0.0004, 0.92 - depth * 0.0008);
+
+  const hemiFactor = Math.exp(-depth / 400);
+  hemi.intensity = 0.3 + 1.1 * hemiFactor;
+  hemi.color.setHSL(0.55, 0.7 * hemiFactor + 0.1, 0.15 + 0.7 * hemiFactor);
+  hemi.groundColor.setHSL(0.58, 0.6, 0.05 + 0.35 * hemiFactor);
+
+  waterFill.intensity = Math.max(0, 1.0 - depth / 200) * (0.8 + Math.sin(performance.now() * 0.0015) * 0.2);
+
+  const wt = performance.now() * 0.001;
+  const wpos = water.geometry.attributes.position;
+  const arr = wpos.array;
+  for (let i = 0; i < arr.length; i += 3) {
+    const ox = waterBasePositions[i];
+    const oz = waterBasePositions[i + 2];
+    arr[i + 1] =
+      Math.sin(ox * 0.15 + wt * 1.4) * 0.15 +
+      Math.cos(oz * 0.12 + wt * 1.1) * 0.15 +
+      Math.sin((ox + oz) * 0.08 + wt * 0.8) * 0.08;
+  }
+  wpos.needsUpdate = true;
+
+  glowPlane.position.x = camera.position.x;
+  glowPlane.position.z = camera.position.z;
+
+  const spar = snow.geometry.attributes.position.array;
+  const px = camera.position.x, py = camera.position.y, pz = camera.position.z;
+  for (let i = 0; i < SNOW_COUNT; i++) {
+    spar[i * 3 + 1] -= snowVelocities[i] * dt;
+    if (spar[i * 3 + 1] < py - 200) {
+      spar[i * 3 + 1] = py + 60;
+      spar[i * 3] = px + (Math.random() - 0.5) * 400;
+      spar[i * 3 + 2] = pz + (Math.random() - 0.5) * 400;
+    }
+    const dx = spar[i * 3] - px;
+    const dz = spar[i * 3 + 2] - pz;
+    if (dx > 200) spar[i * 3] -= 400;
+    if (dx < -200) spar[i * 3] += 400;
+    if (dz > 200) spar[i * 3 + 2] -= 400;
+    if (dz < -200) spar[i * 3 + 2] += 400;
+  }
+  snow.geometry.attributes.position.needsUpdate = true;
+  snowMat.opacity = underwater ? 0.35 + Math.min(0.45, depth / 800 * 0.45) : 0;
+  snowMat.size = 0.15 + Math.min(0.2, depth / 1000 * 0.2);
+}
+
+/* ============================================================
+   19. FISH AI
+   ============================================================ */
+const _tmp = new THREE.Vector3();
+
+function updateShoreFishes(dt) {
+  const t = performance.now() * 0.001;
+  for (const fish of shoreFishes) {
+    const ud = fish.userData;
+    ud.phase += dt * 0.6;
+    ud.vel.x += Math.sin(ud.phase + ud.wobble) * dt * 0.9;
+    ud.vel.y += Math.cos(ud.phase * 0.7 + ud.wobble) * dt * 0.35;
+    ud.vel.z += Math.cos(ud.phase * 0.9 + ud.wobble) * dt * 0.9;
+
+    _tmp.subVectors(fish.position, player.position);
+    if (_tmp.length() < 10) ud.vel.addScaledVector(_tmp.normalize(), dt * 12);
+
+    const sp = ud.vel.length();
+    if (sp > ud.speed) ud.vel.multiplyScalar(ud.speed / sp);
+    if (sp < 0.5) ud.vel.multiplyScalar(1.4);
+
+    if (fish.position.y > -2) ud.vel.y = -Math.abs(ud.vel.y);
+    if (fish.position.y < -70) ud.vel.y = Math.abs(ud.vel.y);
+    if (fish.position.z > 5) ud.vel.z = -Math.abs(ud.vel.z);
+    if (fish.position.z < -180) ud.vel.z = Math.abs(ud.vel.z);
+    if (fish.position.x > 150) ud.vel.x = -Math.abs(ud.vel.x);
+    if (fish.position.x < -150) ud.vel.x = Math.abs(ud.vel.x);
+
+    fish.position.addScaledVector(ud.vel, dt);
+
+    if (ud.vel.lengthSq() > 0.005) {
+      const targetYaw = Math.atan2(ud.vel.x, ud.vel.z);
+      let diff = targetYaw - fish.rotation.y;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      fish.rotation.y += diff * Math.min(1, dt * 4);
+      fish.rotation.x = -Math.atan2(ud.vel.y, Math.hypot(ud.vel.x, ud.vel.z)) * 0.6;
+    }
+
+    fish.rotation.z = Math.sin(t * 8 + ud.phase) * 0.08;
+    fish.position.y += Math.sin(t * 2 + ud.phase) * 0.004;
+    if (ud.pupil) ud.pupil.rotation.z += dt * 1.5;
+    if (ud.glow) ud.glow.intensity = 0.3 + Math.abs(Math.sin(t * 3 + ud.phase)) * 0.3;
+  }
+}
+
+function updateStripedFishes(dt) {
+  if (!stripedFishSpawned) return;
+  const t = performance.now() * 0.001;
+  for (const fish of stripedFishes) {
+    if (!fish.visible) continue;
+    const ud = fish.userData;
+    ud.phase += dt * 0.35;
+    ud.vel.x += Math.sin(ud.phase + ud.wobble) * dt * 0.5;
+    ud.vel.y += Math.cos(ud.phase * 0.6 + ud.wobble) * dt * 0.25;
+    ud.vel.z += Math.cos(ud.phase * 0.8 + ud.wobble) * dt * 0.5;
+
+    _tmp.subVectors(fish.position, player.position);
+    if (_tmp.length() < 22) ud.vel.addScaledVector(_tmp.normalize(), dt * 10);
+
+    const sp = ud.vel.length();
+    if (sp > ud.speed) ud.vel.multiplyScalar(ud.speed / sp);
+    if (sp < 0.4) ud.vel.multiplyScalar(1.3);
+
+    if (fish.position.y > -10) ud.vel.y = -Math.abs(ud.vel.y);
+    if (fish.position.y < -120) ud.vel.y = Math.abs(ud.vel.y);
+    if (fish.position.z > 15) ud.vel.z = -Math.abs(ud.vel.z);
+    if (fish.position.z < -300) ud.vel.z = Math.abs(ud.vel.z);
+    if (fish.position.x > 250) ud.vel.x = -Math.abs(ud.vel.x);
+    if (fish.position.x < -250) ud.vel.x = Math.abs(ud.vel.x);
+
+    fish.position.addScaledVector(ud.vel, dt);
+
+    if (ud.vel.lengthSq() > 0.005) {
+      const targetYaw = Math.atan2(ud.vel.x, ud.vel.z);
+      let diff = targetYaw - fish.rotation.y;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      fish.rotation.y += diff * Math.min(1, dt * 2.5);
+      fish.rotation.x = -Math.atan2(ud.vel.y, Math.hypot(ud.vel.x, ud.vel.z)) * 0.4;
+    }
+    fish.rotation.z = Math.sin(t * 1.5 + ud.phase) * 0.06;
+    if (ud.tailFin) ud.tailFin.rotation.z = Math.sin(t * 4 + ud.swimPhase) * 0.35;
+    fish.position.y += Math.sin(t * 1.2 + ud.phase) * 0.008;
+  }
+}
+
+function updateDeepFishes(dt) {
+  for (const fish of deepFishes) {
+    const ud = fish.userData;
+    ud.phase += dt * 0.6;
+    ud.vel.x += Math.sin(ud.phase) * dt * 0.6;
+    ud.vel.y += Math.cos(ud.phase * 0.7) * dt * 0.25;
+    ud.vel.z += Math.cos(ud.phase * 0.9) * dt * 0.6;
+
+    _tmp.subVectors(fish.position, player.position);
+    if (_tmp.length() < 12) ud.vel.addScaledVector(_tmp.normalize(), dt * 10);
+
+    const sp = ud.vel.length();
+    if (sp > ud.speed) ud.vel.multiplyScalar(ud.speed / sp);
+    if (sp < 0.6) ud.vel.multiplyScalar(1.3);
+
+    if (fish.position.y > -500) ud.vel.y = -Math.abs(ud.vel.y);
+    if (fish.position.y < -1200) ud.vel.y = Math.abs(ud.vel.y);
+
+    fish.position.addScaledVector(ud.vel, dt);
+    if (ud.vel.lengthSq() > 0.01) {
+      fish.lookAt(fish.position.x + ud.vel.x, fish.position.y + ud.vel.y, fish.position.z + ud.vel.z);
+    }
+  }
+}
+
+function updateJellies() {
+  const t = performance.now() * 0.001;
+  for (const j of jellies) {
+    const ud = j.userData;
+    j.position.y += Math.sin(t * ud.bobSpeed + ud.phase) * 0.012;
+    j.position.x += ud.drift.x * 0.02;
+    j.position.z += ud.drift.z * 0.02;
+    j.scale.setScalar(0.85 + Math.abs(Math.sin(t * 1.2 + ud.phase)) * 0.35);
+  }
+}
+
+/* ============================================================
+   20. GAME LOOP
+   ============================================================ */
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  if (STATE.running && !STATE.dead) {
+    updatePlayer(dt);
+    if (!STATE.dead) {
+      updateCamera(dt);
+      updateEnvironment(dt);
+      updateShoreFishes(dt);
+      updateStripedFishes(dt);
+      updateSharks(dt);
+      updateMechaFishes(dt);
+      updateDeepFishes(dt);
+      updateJellies();
+      updateCorals();
+      leviathan.update(dt, player.position);
+
+      // Island bioluminescence pulse
+      const t = performance.now() * 0.001;
+      for (const child of worldTreeGroup.children) {
+        if (child.isPointLight && child !== treeGlow) {
+          child.intensity = 1.2 + Math.sin(t * 2 + child.position.x * 0.1) * 0.6;
+        }
+      }
+      treeGlow.intensity = 3.5 + Math.sin(t * 1.2) * 1.0;
+
+      const showWarn = leviathan.spawned && leviathan.distToPlayer < 60;
+      if (showWarn) warningEl.classList.add('show');
+      else warningEl.classList.remove('show');
+    }
+  }
+
+  renderer.render(scene, camera);
+}
+
+/* ============================================================
+   21. BUTTONS
+   ============================================================ */
+document.getElementById('startBtn').addEventListener('click', () => {
+  const ss = document.getElementById('startScreen');
+  ss.classList.add('hidden');
+  setTimeout(() => { ss.style.display = 'none'; }, 900);
+  STATE.running = true;
+  setTimeout(() => showHint('Walk toward the ocean — WASD to move', 5000), 700);
+});
+
+document.getElementById('restartBtn').addEventListener('click', resetGame);
+
+animate();
+</script>
+</body>
+</html>

@@ -1,0 +1,1567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ROOM 404 - Psychological Horror Experience</title>
+    <!-- Tailwind CSS for modern UI design -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js for 3D graphics rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        /* Custom UI and Horror Aesthetic Styles */
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=VT323&family=Inter:wght@300;400;600&display=swap');
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #030303;
+            color: #d1d5db;
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+        }
+
+        .font-cinzel { font-family: 'Cinzel', serif; }
+        .font-vt323 { font-family: 'VT323', monospace; }
+
+        /* Canvas Layer */
+        #game-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Post-Processing Vignette and Static Canvas Overlay */
+        #fx-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* Dynamic Crosshair */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(0, 0, 0, 0.5);
+            transition: transform 0.15s ease, background-color 0.15s ease, width 0.15s ease, height 0.15s ease;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        #crosshair.active {
+            width: 14px;
+            height: 14px;
+            background-color: #ef4444;
+            border-color: #ffffff;
+            box-shadow: 0 0 8px rgba(239, 68, 68, 0.8);
+        }
+
+        /* Flashlight Battery Bar */
+        .battery-segment {
+            height: 100%;
+            flex: 1;
+            background-color: #22c55e;
+            margin: 0 1px;
+            border-radius: 1px;
+            transition: background-color 0.3s;
+        }
+        .battery-low { background-color: #ef4444 !important; }
+        .battery-mid { background-color: #eab308 !important; }
+
+        /* VHS Static Noise Filter Animation */
+        .vhs-noise {
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            background-size: 100% 3px, 6px 100%;
+        }
+
+        /* Modal backdrop blurring */
+        .backdrop-blur-custom {
+            backdrop-filter: blur(8px) brightness(0.4);
+        }
+
+        /* Subtitle Text Glow */
+        .subtitle-text {
+            text-shadow: 0 2px 4px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.8);
+        }
+
+        /* Custom Scrollbar for Inventory & Notes */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #111827;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4b5563;
+        }
+    </style>
+</head>
+<body>
+    <!-- 3D Game Render Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Visual FX Overlay (Vignette, Noise, Dynamic Lighting Pulse) -->
+    <canvas id="fx-overlay" class="vhs-noise"></canvas>
+
+    <!-- Gameplay HUD Overlay -->
+    <div id="hud-layer" class="absolute inset-0 pointer-events-none z-20 flex flex-col justify-between p-6">
+        <!-- Top Info Bar: Objective & Flashlight -->
+        <div class="flex justify-between items-start">
+            <!-- Dynamic Objective Log -->
+            <div id="objective-box" class="bg-black/60 border-l-2 border-red-600 px-4 py-2 rounded-r shadow-lg transition-all duration-500 opacity-0 transform -translate-x-4">
+                <div class="text-xs uppercase tracking-widest text-red-500 font-semibold mb-0.5">Current Objective</div>
+                <div id="objective-text" class="text-sm font-medium text-gray-200">Explore the hotel lobby.</div>
+            </div>
+
+            <!-- Flashlight & Stamina Indicators -->
+            <div class="flex flex-col items-end gap-2">
+                <div id="flashlight-hud" class="flex items-center gap-2 bg-black/60 px-3 py-1.5 rounded border border-gray-800">
+                    <svg class="w-4 h-4 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                    <div id="battery-container" class="w-16 h-3 bg-gray-900 border border-gray-700 p-0.5 flex rounded-sm">
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                        <div class="battery-segment"></div>
+                    </div>
+                </div>
+                <div class="text-xs text-gray-400 font-mono">[F] Flashlight &bull; [Tab] Inventory &bull; [E] Interact</div>
+            </div>
+        </div>
+
+        <!-- Center Crosshair & Interaction Prompt -->
+        <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <div id="crosshair"></div>
+            <div id="interaction-prompt" class="mt-8 px-3 py-1 bg-black/80 text-white text-xs font-mono rounded border border-gray-700 opacity-0 transition-opacity duration-200 shadow-xl">
+                [E] Interact
+            </div>
+        </div>
+
+        <!-- Subtitles & Story Messages Box -->
+        <div class="flex justify-center pb-8">
+            <div id="subtitle-box" class="max-w-xl text-center text-lg font-medium text-amber-100 subtitle-text bg-black/40 px-6 py-2 rounded-lg transition-opacity duration-300 opacity-0">
+                "Your room is 401. Fourth floor."
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN MENU OVERLAY -->
+    <div id="main-menu" class="absolute inset-0 z-50 flex items-center justify-center bg-black transition-opacity duration-700">
+        <div class="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-red-950/20 via-black to-black"></div>
+        <div class="relative z-10 text-center max-w-lg px-6">
+            <h1 class="text-6xl font-bold tracking-widest text-red-600 font-cinzel mb-2 drop-shadow-[0_0_25px_rgba(220,38,38,0.5)]">ROOM 404</h1>
+            <p class="text-gray-400 tracking-wider text-sm mb-10 font-mono">PSYCHOLOGICAL HORROR EXPERIENCE</p>
+            
+            <div class="flex flex-col gap-4 w-64 mx-auto font-mono">
+                <button id="btn-start" class="px-6 py-3 bg-red-950/40 hover:bg-red-900/60 border border-red-800/80 text-red-200 rounded transition duration-200 tracking-widest font-semibold hover:shadow-[0_0_15px_rgba(220,38,38,0.4)]">
+                    NEW GAME
+                </button>
+                <button id="btn-continue" class="px-6 py-3 bg-gray-900/60 hover:bg-gray-800 border border-gray-700 text-gray-300 rounded transition duration-200 tracking-widest disabled:opacity-40 disabled:cursor-not-allowed">
+                    CONTINUE
+                </button>
+                <button id="btn-settings" class="px-6 py-3 bg-gray-900/60 hover:bg-gray-800 border border-gray-700 text-gray-300 rounded transition duration-200 tracking-widest">
+                    SETTINGS
+                </button>
+                <button id="btn-credits" class="px-6 py-3 bg-gray-900/60 hover:bg-gray-800 border border-gray-700 text-gray-300 rounded transition duration-200 tracking-widest">
+                    CREDITS
+                </button>
+            </div>
+            
+            <div class="mt-12 text-xs text-gray-600 font-mono">
+                Use Headphones for optimal audio experience.<br>WASD to Move &bull; Mouse to Look &bull; E to Interact
+            </div>
+        </div>
+    </div>
+
+    <!-- INVENTORY & JOURNAL MODAL (Tab Key) -->
+    <div id="inventory-modal" class="absolute inset-0 z-40 hidden flex items-center justify-center bg-black/80 backdrop-blur-custom">
+        <div class="bg-gray-950 border border-gray-800 rounded-lg w-11/12 max-w-4xl h-5/6 flex flex-col p-6 shadow-2xl">
+            <!-- Header Tabs -->
+            <div class="flex justify-between items-center border-b border-gray-800 pb-4 mb-6">
+                <div class="flex gap-6 font-cinzel text-lg">
+                    <button id="tab-btn-items" class="text-red-500 font-bold border-b-2 border-red-500 pb-1">INVENTORY</button>
+                    <button id="tab-btn-notes" class="text-gray-400 hover:text-gray-200 transition">DOCUMENTS & CLUES</button>
+                </div>
+                <button id="btn-close-inventory" class="text-gray-500 hover:text-white font-mono text-xl">&times;</button>
+            </div>
+
+            <!-- Content Area -->
+            <div id="inventory-view-items" class="grid grid-cols-1 md:grid-cols-3 gap-6 flex-1 overflow-hidden">
+                <!-- Item List Grid -->
+                <div id="inventory-grid" class="md:col-span-2 grid grid-cols-3 gap-3 overflow-y-auto pr-2 h-full auto-rows-max">
+                    <!-- Items dynamically rendered here -->
+                </div>
+                <!-- Item Detail Preview Box -->
+                <div id="item-detail-panel" class="bg-gray-900/50 border border-gray-800 rounded p-4 flex flex-col justify-between">
+                    <div>
+                        <h3 id="item-detail-title" class="text-lg font-cinzel text-red-400 mb-2">Select an item</h3>
+                        <p id="item-detail-desc" class="text-sm text-gray-400 font-mono leading-relaxed">Inspect your collected keys, documents, and tools.</p>
+                    </div>
+                    <div id="item-detail-tag" class="text-xs font-mono text-gray-600 uppercase border-t border-gray-800 pt-3">
+                        Key Item
+                    </div>
+                </div>
+            </div>
+
+            <div id="inventory-view-notes" class="hidden flex-1 grid grid-cols-1 md:grid-cols-3 gap-6 overflow-hidden">
+                <div id="notes-list" class="space-y-2 overflow-y-auto pr-2">
+                    <!-- Clues dynamic list -->
+                </div>
+                <div id="note-reader" class="md:col-span-2 bg-gray-900/70 border border-gray-800 p-6 rounded overflow-y-auto font-mono text-sm leading-relaxed text-amber-100">
+                    Select a document to read.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PAUSE / SETTINGS MODAL -->
+    <div id="pause-modal" class="absolute inset-0 z-40 hidden flex items-center justify-center bg-black/80 backdrop-blur-custom">
+        <div class="bg-gray-950 border border-gray-800 p-8 rounded-lg w-full max-w-md text-center shadow-2xl">
+            <h2 class="text-2xl font-cinzel text-red-600 mb-6 font-bold tracking-widest">GAME PAUSED</h2>
+            
+            <div id="pause-main-options" class="space-y-4 font-mono">
+                <button id="btn-resume" class="w-full py-3 bg-red-950/50 border border-red-800 text-red-200 rounded hover:bg-red-900/70 transition">RESUME GAME</button>
+                <button id="btn-settings-pause" class="w-full py-3 bg-gray-900 border border-gray-700 text-gray-300 rounded hover:bg-gray-800 transition">SETTINGS</button>
+                <button id="btn-save-game" class="w-full py-3 bg-gray-900 border border-gray-700 text-gray-300 rounded hover:bg-gray-800 transition">SAVE GAME</button>
+                <button id="btn-quit" class="w-full py-3 bg-gray-900 border border-gray-700 text-gray-400 rounded hover:bg-gray-800 transition">MAIN MENU</button>
+            </div>
+
+            <!-- Settings Inner Panel -->
+            <div id="pause-settings-panel" class="hidden text-left space-y-4 font-mono text-xs">
+                <div>
+                    <label class="text-gray-400 block mb-1">Mouse Sensitivity</label>
+                    <input type="range" id="setting-sensitivity" min="0.5" max="3.0" step="0.1" value="1.0" class="w-full accent-red-600">
+                </div>
+                <div>
+                    <label class="text-gray-400 block mb-1">Master Audio Volume</label>
+                    <input type="range" id="setting-volume" min="0" max="1" step="0.05" value="0.8" class="w-full accent-red-600">
+                </div>
+                <div>
+                    <label class="text-gray-400 block mb-1">Brightness Gamma</label>
+                    <input type="range" id="setting-brightness" min="0.5" max="1.8" step="0.05" value="1.0" class="w-full accent-red-600">
+                </div>
+                <button id="btn-back-pause" class="w-full py-2 mt-4 bg-gray-800 text-gray-300 rounded hover:bg-gray-700 transition">BACK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CCTV SECURITY TERMINAL UI OVERLAY -->
+    <div id="cctv-modal" class="absolute inset-0 z-30 hidden bg-black flex flex-col p-6 font-vt323 text-green-500">
+        <div class="flex justify-between items-center border-b border-green-800 pb-2 mb-4">
+            <div class="text-xl tracking-widest flex items-center gap-2">
+                <span class="inline-block w-3 h-3 bg-red-600 rounded-full animate-ping"></span>
+                HOTEL SECURITY CCTV SYSTEM - FLOOR 4
+            </div>
+            <button id="btn-exit-cctv" class="text-green-400 hover:text-white px-3 py-1 border border-green-800 rounded">[ESC / EXIT]</button>
+        </div>
+        
+        <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-4 overflow-hidden">
+            <!-- Camera View Screen -->
+            <div class="md:col-span-3 bg-gray-900 border-2 border-green-900 relative overflow-hidden flex items-center justify-center">
+                <canvas id="cctv-feed-canvas" class="w-full h-full object-cover"></canvas>
+                <div class="absolute top-4 left-4 text-lg bg-black/70 px-3 py-1 border border-green-800" id="cctv-cam-label">CAM 01 - MAIN LOBBY</div>
+                <div class="absolute top-4 right-4 text-lg bg-black/70 px-3 py-1 text-red-500 font-bold" id="cctv-timestamp">11:59:42 PM</div>
+                <div class="absolute bottom-4 left-4 text-xs bg-black/80 p-2 text-green-400 font-mono" id="cctv-feed-status">SIGNAL: STABLE</div>
+            </div>
+
+            <!-- Controls Side Bar -->
+            <div class="bg-gray-950 border border-green-900 p-4 flex flex-col justify-between">
+                <div>
+                    <h3 class="text-lg text-green-400 mb-4 border-b border-green-900 pb-1">CAMERA SELECT</h3>
+                    <div class="space-y-2">
+                        <button class="cctv-cam-btn w-full text-left p-2 border border-green-900 hover:bg-green-950/60 transition active" data-cam="1">CAM 01: LOBBY</button>
+                        <button class="cctv-cam-btn w-full text-left p-2 border border-green-900 hover:bg-green-950/60 transition" data-cam="2">CAM 02: HALLWAY 400s</button>
+                        <button class="cctv-cam-btn w-full text-left p-2 border border-green-900 hover:bg-green-950/60 transition" data-cam="3">CAM 03: ELEVATOR SHAFT</button>
+                        <button class="cctv-cam-btn w-full text-left p-2 border border-red-900 text-red-400 hover:bg-red-950/40 transition" data-cam="4">CAM 04: ROOM [???]</button>
+                    </div>
+                </div>
+
+                <!-- CCTV Secret Puzzle Keypad -->
+                <div class="border-t border-green-900 pt-4">
+                    <div class="text-xs text-green-600 mb-1">REMOTE OVERRIDE CODE</div>
+                    <div id="cctv-code-display" class="bg-black border border-green-800 text-green-400 text-center text-xl py-1 mb-2 tracking-widest">----</div>
+                    <div class="grid grid-cols-3 gap-1 text-sm font-mono">
+                        <button class="cctv-key-btn bg-gray-900 border border-green-900 py-2 hover:bg-green-900">1</button>
+                        <button class="cctv-key-btn bg-gray-900 border border-green-900 py-2 hover:bg-green-900">2</button>
+                        <button class="cctv-key-btn bg-gray-900 border border-green-900 py-2 hover:bg-green-900">3</button>
+                        <button class="cctv-key-btn bg-gray-900 border border-green-900 py-2 hover:bg-green-900">4</button>
+                        <button class="cctv-key-btn bg-gray-900 border border-green-900 py-2 hover:bg-green-900">5</button>
+                        <button class="cctv-key-btn bg-gray-900 border border-green-900 py-2 hover:bg-green-900">6</button>
+                        <button class="cctv-key-btn bg-gray-900 border border-green-900 py-2 hover:bg-green-900">7</button>
+                        <button class="cctv-key-btn bg-gray-900 border border-green-900 py-2 hover:bg-green-900">8</button>
+                        <button class="cctv-key-btn bg-gray-900 border border-green-900 py-2 hover:bg-green-900">9</button>
+                        <button id="cctv-key-clear" class="bg-red-950 border border-red-900 text-red-300 py-2 hover:bg-red-900">CLR</button>
+                        <button class="cctv-key-btn bg-gray-900 border border-green-900 py-2 hover:bg-green-900">0</button>
+                        <button id="cctv-key-enter" class="bg-green-950 border border-green-700 text-green-300 py-2 hover:bg-green-900">ENT</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GAME OVER / ENDING SCREEN -->
+    <div id="ending-screen" class="absolute inset-0 z-50 hidden bg-black flex flex-col items-center justify-center p-8 text-center">
+        <h1 id="ending-title" class="text-5xl font-cinzel text-red-600 font-bold mb-4 tracking-widest">ENDING</h1>
+        <p id="ending-subtitle" class="text-lg text-gray-400 max-w-xl font-mono leading-relaxed mb-8">You left the hotel into the night...</p>
+        <button id="btn-restart-game" class="px-8 py-3 bg-red-950 hover:bg-red-900 border border-red-700 text-red-100 font-mono rounded tracking-widest transition">
+            RETURN TO MAIN MENU
+        </button>
+    </div>
+
+    <!-- MAIN JAVASCRIPT LOGIC -->
+    <script>
+        // ==========================================
+        // 1. PROCEDURAL WEB AUDIO HORROR ENGINE
+        // ==========================================
+        class AudioEngine {
+            constructor() {
+                this.ctx = null;
+                this.masterGain = null;
+                this.ambientOsc = null;
+                this.ambientGain = null;
+                this.heartbeatInterval = null;
+                this.volume = 0.8;
+                this.initialized = false;
+            }
+
+            init() {
+                if (this.initialized) return;
+                try {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                    this.masterGain = this.ctx.createGain();
+                    this.masterGain.gain.value = this.volume;
+                    this.masterGain.connect(this.ctx.destination);
+                    this.initialized = true;
+                    this.startHorrorAmbient();
+                } catch (e) {
+                    console.warn("Web Audio API not supported", e);
+                }
+            }
+
+            setVolume(val) {
+                this.volume = val;
+                if (this.masterGain && this.ctx) {
+                    this.masterGain.gain.setValueAtTime(val, this.ctx.currentTime);
+                }
+            }
+
+            // Low frequency horror drone
+            startHorrorAmbient() {
+                if (!this.ctx) return;
+                const osc1 = this.ctx.createOscillator();
+                const osc2 = this.ctx.createOscillator();
+                const filter = this.ctx.createBiquadFilter();
+                this.ambientGain = this.ctx.createGain();
+
+                osc1.type = 'sawtooth';
+                osc1.frequency.setValueAtTime(45, this.ctx.currentTime); // Low bass rumble
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(48.5, this.ctx.currentTime); // Beat frequency
+
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(180, this.ctx.currentTime);
+
+                this.ambientGain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+
+                osc1.connect(filter);
+                osc2.connect(filter);
+                filter.connect(this.ambientGain);
+                this.ambientGain.connect(this.masterGain);
+
+                osc1.start();
+                osc2.start();
+            }
+
+            playFootstep(isSprinting = false) {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                const filter = this.ctx.createBiquadFilter();
+
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(isSprinting ? 120 : 80, now);
+                osc.frequency.exponentialRampToValueAtTime(30, now + 0.12);
+
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(300, now);
+
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+                osc.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.masterGain);
+
+                osc.start(now);
+                osc.stop(now + 0.13);
+            }
+
+            playPhoneRing() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc1 = this.ctx.createOscillator();
+                const osc2 = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc1.frequency.setValueAtTime(440, now);
+                osc2.frequency.setValueAtTime(480, now);
+
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
+
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(this.masterGain);
+
+                osc1.start(now);
+                osc2.start(now);
+                osc1.stop(now + 1.2);
+                osc2.stop(now + 1.2);
+            }
+
+            playStaticSting() {
+                if (!this.ctx) return;
+                const bufferSize = this.ctx.sampleRate * 0.5;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(1200, this.ctx.currentTime);
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.masterGain);
+
+                noise.start();
+            }
+
+            playDoorClick() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.exponentialRampToValueAtTime(40, now + 0.08);
+
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                osc.start(now);
+                osc.stop(now + 0.09);
+            }
+
+            playPickupSound() {
+                if (!this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(520, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.15);
+
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                osc.start(now);
+                osc.stop(now + 0.16);
+            }
+
+            triggerHeartbeat(enable) {
+                if (enable && !this.heartbeatInterval) {
+                    this.heartbeatInterval = setInterval(() => {
+                        if (!this.ctx) return;
+                        const now = this.ctx.currentTime;
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(60, now);
+                        osc.frequency.exponentialRampToValueAtTime(20, now + 0.15);
+
+                        gain.gain.setValueAtTime(0.4, now);
+                        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+                        osc.connect(gain);
+                        gain.connect(this.masterGain);
+                        osc.start(now);
+                        osc.stop(now + 0.16);
+                    }, 800);
+                } else if (!enable && this.heartbeatInterval) {
+                    clearInterval(this.heartbeatInterval);
+                    this.heartbeatInterval = null;
+                }
+            }
+        }
+
+        const audio = new AudioEngine();
+
+        // ==========================================
+        // 2. PROCEDURAL TEXTURE GENERATOR
+        // ==========================================
+        class TextureGenerator {
+            static createWallpaper() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+
+                // Vintage Burgundy Base
+                ctx.fillStyle = '#1c0a0c';
+                ctx.fillRect(0, 0, 512, 512);
+
+                // Subtle Damask/Striped Pattern
+                ctx.strokeStyle = '#2b1013';
+                ctx.lineWidth = 16;
+                for (let x = 0; x < 512; x += 32) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, 512);
+                    ctx.stroke();
+                }
+
+                // Fleur-de-lis / Diamond decorative shapes
+                ctx.fillStyle = '#3a161b';
+                for (let x = 16; x < 512; x += 64) {
+                    for (let y = 16; y < 512; y += 64) {
+                        ctx.beginPath();
+                        ctx.arc(x, y, 6, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                }
+
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.wrapT = THREE.RepeatWrapping;
+                texture.repeat.set(4, 2);
+                return texture;
+            }
+
+            static createCarpet() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 256;
+                const ctx = canvas.getContext('2d');
+
+                ctx.fillStyle = '#1e1b18';
+                ctx.fillRect(0, 0, 256, 256);
+
+                // Geometric hotel carpet pattern
+                ctx.strokeStyle = '#3d261a';
+                ctx.lineWidth = 4;
+                for (let i = 0; i < 256; i += 32) {
+                    ctx.strokeRect(i + 4, i + 4, 24, 24);
+                }
+
+                // Add carpet noise texture
+                for (let i = 0; i < 5000; i++) {
+                    ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.1)';
+                    ctx.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+                }
+
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.wrapS = THREE.RepeatWrapping;
+                texture.wrapT = THREE.RepeatWrapping;
+                texture.repeat.set(8, 8);
+                return texture;
+            }
+
+            static createDoorTexture(doorNumber = "401") {
+                const canvas = document.createElement('canvas');
+                canvas.width = 256;
+                canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+
+                // Dark Wood Base
+                ctx.fillStyle = '#1a0d07';
+                ctx.fillRect(0, 0, 256, 512);
+
+                // Wood grain lines
+                ctx.strokeStyle = '#29160c';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 256; i += 8) {
+                    ctx.beginPath();
+                    ctx.moveTo(i, 0);
+                    ctx.lineTo(i + (Math.random() * 10 - 5), 512);
+                    ctx.stroke();
+                }
+
+                // Molded Panels
+                ctx.strokeStyle = '#0d0603';
+                ctx.lineWidth = 6;
+                ctx.strokeRect(20, 30, 216, 200);
+                ctx.strokeRect(20, 260, 216, 210);
+
+                // Brass Plate & Door Number
+                ctx.fillStyle = '#8a6d3b';
+                ctx.fillRect(88, 50, 80, 40);
+                ctx.strokeStyle = '#524021';
+                ctx.strokeRect(88, 50, 80, 40);
+
+                ctx.fillStyle = '#0a0a0a';
+                ctx.font = 'bold 22px serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(doorNumber, 128, 70);
+
+                // Door knob
+                ctx.beginPath();
+                ctx.arc(35, 260, 10, 0, Math.PI * 2);
+                ctx.fillStyle = '#b89247';
+                ctx.fill();
+
+                return new THREE.CanvasTexture(canvas);
+            }
+
+            static createScratched404Wall() {
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+
+                ctx.fillStyle = '#1c0a0c';
+                ctx.fillRect(0, 0, 512, 512);
+
+                // Eerie scratched "404 DOES NOT EXIST" text
+                ctx.fillStyle = '#800c0c';
+                ctx.font = 'bold 36px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('404 DOES NOT EXIST', 256, 256);
+
+                // Scratch lines
+                ctx.strokeStyle = '#aa1111';
+                ctx.lineWidth = 3;
+                for (let i = 0; i < 20; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(Math.random() * 512, Math.random() * 512);
+                    ctx.lineTo(Math.random() * 512, Math.random() * 512);
+                    ctx.stroke();
+                }
+
+                return new THREE.CanvasTexture(canvas);
+            }
+        }
+
+        // ==========================================
+        // 3. GAME STATE & INVENTORY MANAGEMENT
+        // ==========================================
+        class GameState {
+            constructor() {
+                this.chapter = 1; // 1: Check In, 2: The Missing Room, 3: The Guest, 4: Room 404
+                this.objective = "Explore the hotel lobby and locate Room 401.";
+                this.inventory = []; // Array of item objects
+                this.clues = []; // Array of document strings
+                this.flags = {
+                    hasKey401: false,
+                    entered401: false,
+                    phoneAnsweredCh1: false,
+                    sawMirrorScare: false,
+                    elevatorUnlocked: false,
+                    cctvSolved: false,
+                    hasBlueprint: false,
+                    hasBrassKey: false,
+                    guestEncountered: false,
+                    room404Unlocked: false
+                };
+            }
+
+            addItem(id, name, description, tag = "Key Item") {
+                if (!this.inventory.find(i => i.id === id)) {
+                    this.inventory.push({ id, name, description, tag });
+                    audio.playPickupSound();
+                    UI.updateInventoryGrid();
+                    UI.showSubtitle(`Acquired: ${name}`);
+                }
+            }
+
+            hasItem(id) {
+                return this.inventory.some(i => i.id === id);
+            }
+
+            addClue(title, text) {
+                if (!this.clues.find(c => c.title === title)) {
+                    this.clues.push({ title, text });
+                    UI.updateNotesList();
+                    UI.showSubtitle(`New Clue Recorded: ${title}`);
+                }
+            }
+
+            setObjective(text) {
+                this.objective = text;
+                UI.updateObjective(text);
+            }
+
+            save() {
+                const data = {
+                    chapter: this.chapter,
+                    objective: this.objective,
+                    inventory: this.inventory,
+                    clues: this.clues,
+                    flags: this.flags
+                };
+                localStorage.setItem('ROOM_404_SAVE', JSON.stringify(data));
+                UI.showSubtitle("Progress Saved.");
+            }
+
+            load() {
+                const raw = localStorage.getItem('ROOM_404_SAVE');
+                if (raw) {
+                    const data = JSON.parse(raw);
+                    this.chapter = data.chapter;
+                    this.objective = data.objective;
+                    this.inventory = data.inventory || [];
+                    this.clues = data.clues || [];
+                    this.flags = data.flags || {};
+                    UI.updateObjective(this.objective);
+                    UI.updateInventoryGrid();
+                    UI.updateNotesList();
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        const state = new GameState();
+
+        // ==========================================
+        // 4. THREE.JS 3D WORLD & ARCHITECTURE
+        // ==========================================
+        class World {
+            constructor() {
+                this.container = document.getElementById('game-canvas');
+                this.scene = new THREE.Scene();
+                this.scene.fog = new THREE.FogExp2(0x030303, 0.12); // Thick horror fog
+
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
+                this.renderer = new THREE.WebGLRenderer({ canvas: this.container, antialias: true, powerPreference: "high-performance" });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                this.renderer.toneMappingExposure = 0.9;
+
+                // Dynamic Flashlight
+                this.flashlight = new THREE.SpotLight(0xfffaed, 2.5, 18, Math.PI / 6, 0.4, 1.5);
+                this.flashlight.castShadow = true;
+                this.flashlight.shadow.mapSize.width = 1024;
+                this.flashlight.shadow.mapSize.height = 1024;
+                this.flashlight.position.set(0, 0, 0);
+                this.scene.add(this.flashlight);
+                this.scene.add(this.flashlight.target);
+
+                // Ambient Low Lighting
+                this.ambientLight = new THREE.AmbientLight(0x1a1829, 0.25);
+                this.scene.add(this.ambientLight);
+
+                // Interactive objects registry
+                this.interactables = [];
+                this.dynamicDoors = {};
+                this.hallwayGroup = new THREE.Group();
+                this.scene.add(this.hallwayGroup);
+
+                // Materials
+                this.matWallpaper = new THREE.MeshStandardMaterial({ map: TextureGenerator.createWallpaper(), roughness: 0.8 });
+                this.matCarpet = new THREE.MeshStandardMaterial({ map: TextureGenerator.createCarpet(), roughness: 0.9 });
+                this.matCeiling = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.95 });
+                this.matWood = new THREE.MeshStandardMaterial({ color: 0x221108, roughness: 0.6 });
+
+                this.buildHotelEnvironment();
+            }
+
+            buildHotelEnvironment() {
+                // Main Lobby Area
+                this.createRoom(0, 0, 0, 12, 4, 12, "LOBBY");
+
+                // Reception Desk in Lobby
+                const deskGeo = new THREE.BoxGeometry(4, 1.1, 1.2);
+                const deskMesh = new THREE.Mesh(deskGeo, this.matWood);
+                deskMesh.position.set(0, 0.55, -4);
+                this.scene.add(deskMesh);
+
+                // Reception Bell / Ledger
+                const ledgerGeo = new THREE.BoxGeometry(0.5, 0.05, 0.4);
+                const ledgerMesh = new THREE.Mesh(ledgerGeo, new THREE.MeshStandardMaterial({ color: 0x5a1818 }));
+                ledgerMesh.position.set(-1, 1.15, -4);
+                ledgerMesh.userData = {
+                    interactable: true,
+                    type: "LEDGER",
+                    prompt: "[E] Inspect Guest Ledger",
+                    action: () => {
+                        state.addClue("Hotel Guest Ledger", "Entry Oct 14: Room 401 occupied. Entry Oct 15: Room 404 entry crossed out in dark red ink.");
+                        UI.showSubtitle("The ledger shows Room 404 was erased from records...");
+                    }
+                };
+                this.scene.add(ledgerMesh);
+                this.interactables.push(ledgerMesh);
+
+                // Lobby Key Rack / Key 401
+                const keyMesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.1, 0.2, 0.05),
+                    new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.8, roughness: 0.2 })
+                );
+                keyMesh.position.set(0.5, 1.2, -4);
+                keyMesh.userData = {
+                    interactable: true,
+                    type: "KEY_401",
+                    prompt: "[E] Take Room 401 Key",
+                    action: () => {
+                        state.flags.hasKey401 = true;
+                        state.addItem("key401", "Room 401 Key", "Standard brass key labeled '401'.");
+                        state.setObjective("Take the elevator to the 4th floor and find Room 401.");
+                        this.scene.remove(keyMesh);
+                    }
+                };
+                this.scene.add(keyMesh);
+                this.interactables.push(keyMesh);
+
+                // Main Floor 4 Hallway Corridor
+                this.buildFloor4Hallway();
+
+                // Elevator Architecture in Lobby
+                this.buildElevator(0, 0, 5.5);
+            }
+
+            createRoom(x, y, z, width, height, depth, tag = "") {
+                const group = new THREE.Group();
+                group.position.set(x, y, z);
+
+                // Floor
+                const floorGeo = new THREE.PlaneGeometry(width, depth);
+                const floor = new THREE.Mesh(floorGeo, this.matCarpet);
+                floor.rotation.x = -Math.PI / 2;
+                floor.receiveShadow = true;
+                group.add(floor);
+
+                // Ceiling
+                const ceiling = new THREE.Mesh(floorGeo, this.matCeiling);
+                ceiling.position.y = height;
+                ceiling.rotation.x = Math.PI / 2;
+                group.add(ceiling);
+
+                // Walls (Back, Left, Right)
+                const backWallGeo = new THREE.PlaneGeometry(width, height);
+                const backWall = new THREE.Mesh(backWallGeo, this.matWallpaper);
+                backWall.position.set(0, height / 2, -depth / 2);
+                group.add(backWall);
+
+                const sideWallGeo = new THREE.PlaneGeometry(depth, height);
+                const leftWall = new THREE.Mesh(sideWallGeo, this.matWallpaper);
+                leftWall.position.set(-width / 2, height / 2, 0);
+                leftWall.rotation.y = Math.PI / 2;
+                group.add(leftWall);
+
+                const rightWall = new THREE.Mesh(sideWallGeo, this.matWallpaper);
+                rightWall.position.set(width / 2, height / 2, 0);
+                rightWall.rotation.y = -Math.PI / 2;
+                group.add(rightWall);
+
+                this.scene.add(group);
+                return group;
+            }
+
+            buildFloor4Hallway() {
+                // Floor 4 Hallway layout (ZOffset at y = 10 for upper floor)
+                const hallY = 10;
+                
+                // Main Hallway Tunnel (Width: 3, Height: 3, Length: 24)
+                const hallGeo = new THREE.BoxGeometry(3, 3, 24);
+                const hallMat = new THREE.MeshStandardMaterial({ color: 0x150b0c, side: THREE.BackSide, roughness: 0.8 });
+                const hallMesh = new THREE.Mesh(hallGeo, hallMat);
+                hallMesh.position.set(0, hallY + 1.5, -12);
+                this.hallwayGroup.add(hallMesh);
+
+                // Hallway Ceiling Lights (Flickering)
+                for (let z = -4; z >= -20; z -= 6) {
+                    const light = new THREE.PointLight(0xffddaa, 0.8, 6);
+                    light.position.set(0, hallY + 2.7, z);
+                    this.hallwayGroup.add(light);
+
+                    // Lamp fixture mesh
+                    const fixture = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.2, 0.2, 0.1),
+                        new THREE.MeshBasicMaterial({ color: 0xfff0aa })
+                    );
+                    fixture.position.set(0, hallY + 2.95, z);
+                    this.hallwayGroup.add(fixture);
+                }
+
+                // Doors along Floor 4:
+                // Left Side: 401 (z = -6), 403 (z = -14)
+                // Right Side: 402 (z = -6), 405 (z = -14) -- NOTE: 404 is MISSING at z = -10!
+                
+                this.createDoor( -1.48, hallY, -6, Math.PI / 2, "401", () => this.enterRoom401());
+                this.createDoor(  1.48, hallY, -6, -Math.PI / 2, "402", () => this.enterRoom402());
+                this.createDoor( -1.48, hallY, -14, Math.PI / 2, "403", () => this.enterRoom403());
+                this.createDoor(  1.48, hallY, -14, -Math.PI / 2, "405", () => this.enterRoom405());
+
+                // Missing Room 404 Location (Scratched Wall or Blank Surface)
+                const wall404Geo = new THREE.PlaneGeometry(1.8, 2.4);
+                const wall404Mat = new THREE.MeshStandardMaterial({ map: TextureGenerator.createScratched404Wall() });
+                const wall404 = new THREE.Mesh(wall404Geo, wall404Mat);
+                wall404.position.set(1.47, hallY + 1.2, -10);
+                wall404.rotation.y = -Math.PI / 2;
+                this.hallwayGroup.add(wall404);
+
+                // Security Room Door at the end of hallway (z = -23.9)
+                this.createDoor(0, hallY, -23.9, 0, "CCTV ROOM", () => this.enterCCTVRoom());
+            }
+
+            createDoor(x, y, z, rotationY, label, onInteract) {
+                const group = new THREE.Group();
+                group.position.set(x, y, z);
+                group.rotation.y = rotationY;
+
+                const doorGeo = new THREE.BoxGeometry(0.1, 2.2, 1.2);
+                const doorMat = new THREE.MeshStandardMaterial({ map: TextureGenerator.createDoorTexture(label) });
+                const doorMesh = new THREE.Mesh(doorGeo, doorMat);
+                doorMesh.position.set(0, 1.1, 0);
+
+                doorMesh.userData = {
+                    interactable: true,
+                    prompt: `[E] Open Door ${label}`,
+                    action: () => {
+                        audio.playDoorClick();
+                        onInteract();
+                    }
+                };
+
+                group.add(doorMesh);
+                this.hallwayGroup.add(group);
+                this.interactables.push(doorMesh);
+                this.dynamicDoors[label] = group;
+            }
+
+            buildElevator(x, y, z) {
+                const eleGroup = new THREE.Group();
+                eleGroup.position.set(x, y, z);
+
+                // Elevator Box Interior
+                const boxGeo = new THREE.BoxGeometry(2.4, 2.8, 2.4);
+                const boxMat = new THREE.MeshStandardMaterial({ color: 0x333333, side: THREE.BackSide, metalness: 0.5, roughness: 0.4 });
+                const boxMesh = new THREE.Mesh(boxGeo, boxMat);
+                boxMesh.position.y = 1.4;
+                eleGroup.add(boxMesh);
+
+                // Elevator Light
+                const light = new THREE.PointLight(0xffeedd, 0.9, 4);
+                light.position.set(0, 2.6, 0);
+                eleGroup.add(light);
+
+                // Elevator Button Panel
+                const panelGeo = new THREE.BoxGeometry(0.1, 0.6, 0.4);
+                const panelMesh = new THREE.Mesh(panelGeo, new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.9 }));
+                panelMesh.position.set(1.15, 1.4, 0);
+
+                panelMesh.userData = {
+                    interactable: true,
+                    prompt: "[E] Use Elevator Panel",
+                    action: () => {
+                        if (player.position.y > 5) {
+                            // Go to Lobby
+                            player.position.set(0, 1.6, 4);
+                            UI.showSubtitle("Elevator descending to Ground Lobby...");
+                        } else {
+                            if (!state.flags.hasKey401) {
+                                UI.showSubtitle("I should grab my room key from reception first.");
+                                return;
+                            }
+                            // Go to Floor 4
+                            player.position.set(0, 11.6, -1);
+                            state.setObjective("Locate Room 401 down the hallway.");
+                            UI.showSubtitle("Elevator ascending to 4th Floor...");
+                        }
+                    }
+                };
+
+                eleGroup.add(panelMesh);
+                this.interactables.push(panelMesh);
+                this.scene.add(eleGroup);
+            }
+
+            // Room Interior Events & Mutations
+            enterRoom401() {
+                if (state.chapter === 1 && !state.flags.entered401) {
+                    state.flags.entered401 = true;
+                    // Teleport inside Room 401
+                    player.position.set(-6, 11.6, -6);
+                    state.setObjective("Inspect Room 401.");
+                    UI.showSubtitle("Room 401... Everything looks normal. Or does it?");
+
+                    // Spawn Ringing Telephone
+                    this.spawnTelephone(-7.5, 11, -7);
+                } else {
+                    player.position.set(-6, 11.6, -6);
+                }
+            }
+
+            enterRoom402() {
+                player.position.set(6, 11.6, -6);
+                UI.showSubtitle("Room 402 feels strangely cold.");
+                if (!state.flags.sawMirrorScare) {
+                    state.flags.sawMirrorScare = true;
+                    audio.playStaticSting();
+                    UI.showSubtitle("Did the bathroom mirror reflection just lag behind me?!");
+                }
+            }
+
+            enterRoom403() {
+                player.position.set(-6, 11.6, -14);
+                UI.showSubtitle("Room 403. An old blueprint sits on the desk.");
+                if (!state.flags.hasBlueprint) {
+                    this.spawnBlueprint(-7, 11.8, -15);
+                }
+            }
+
+            enterRoom405() {
+                player.position.set(6, 11.6, -14);
+                UI.showSubtitle("Room 405. Quiet scratching sounds emanate from the wall where 404 should be.");
+            }
+
+            enterCCTVRoom() {
+                if (!state.flags.cctvSolved && !state.hasItem("keycard")) {
+                    UI.showSubtitle("The Security Terminal requires an override key code.");
+                }
+                UI.openCCTVTerminal();
+            }
+
+            spawnTelephone(x, y, z) {
+                const phoneMesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.3, 0.2, 0.3),
+                    new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.3 })
+                );
+                phoneMesh.position.set(x, y + 0.5, z);
+                phoneMesh.userData = {
+                    interactable: true,
+                    prompt: "[E] Answer Ringing Phone",
+                    action: () => {
+                        if (!state.flags.phoneAnsweredCh1) {
+                            state.flags.phoneAnsweredCh1 = true;
+                            audio.playStaticSting();
+                            UI.showSubtitle("Phone Voice: 'Don't look for Room 404... It is watching you.'");
+                            state.chapter = 2;
+                            state.setObjective("Investigate the missing Room 404 in the security CCTV room.");
+                        }
+                    }
+                };
+                this.scene.add(phoneMesh);
+                this.interactables.push(phoneMesh);
+
+                // Start periodic ringing
+                setInterval(() => {
+                    if (!state.flags.phoneAnsweredCh1) audio.playPhoneRing();
+                }, 6000);
+            }
+
+            spawnBlueprint(x, y, z) {
+                const bpMesh = new THREE.Mesh(
+                    new THREE.PlaneGeometry(0.6, 0.4),
+                    new THREE.MeshStandardMaterial({ color: 0x1d4ed8, side: THREE.DoubleSide })
+                );
+                bpMesh.position.set(x, y, z);
+                bpMesh.rotation.x = -Math.PI / 2;
+                bpMesh.userData = {
+                    interactable: true,
+                    prompt: "[E] Pick up Hotel Blueprint",
+                    action: () => {
+                        state.flags.hasBlueprint = true;
+                        state.addItem("blueprint", "Architect Blueprint", "Floor 4 blueprint clearly shows Room 404 situated between 403 and 405.");
+                        state.addClue("Hotel Floor 4 Blueprint", "Room 404 exists on architectural plans, built with reinforced double steel doors.");
+                        this.scene.remove(bpMesh);
+                    }
+                };
+                this.scene.add(bpMesh);
+                this.interactables.push(bpMesh);
+            }
+        }
+
+        const world = new World();
+
+        // ==========================================
+        // 5. FIRST PERSON PLAYER CONTROLLER
+        // ==========================================
+        class PlayerController {
+            constructor() {
+                this.camera = world.camera;
+                this.position = new THREE.Vector3(0, 1.6, 3); // Start in Lobby
+                this.velocity = new THREE.Vector3();
+                this.pitch = 0;
+                this.yaw = 0;
+
+                this.keys = { W: false, A: false, S: false, D: false, Shift: false, Crouch: false };
+                this.isGrounded = true;
+                this.flashlightOn = true;
+                this.battery = 100;
+
+                this.raycaster = new THREE.Raycaster();
+                this.hoveredObject = null;
+
+                this.isLocked = false;
+                this.setupInputs();
+            }
+
+            setupInputs() {
+                document.addEventListener('keydown', (e) => {
+                    if (!this.isLocked) return;
+                    switch (e.code) {
+                        case 'KeyW': this.keys.W = true; break;
+                        case 'KeyS': this.keys.S = true; break;
+                        case 'KeyA': this.keys.A = true; break;
+                        case 'KeyD': this.keys.D = true; break;
+                        case 'ShiftLeft': this.keys.Shift = true; break;
+                        case 'KeyC': this.keys.Crouch = !this.keys.Crouch; break;
+                        case 'KeyF':
+                            this.flashlightOn = !this.flashlightOn;
+                            world.flashlight.visible = this.flashlightOn;
+                            audio.playDoorClick();
+                            break;
+                        case 'KeyE':
+                            this.interact();
+                            break;
+                        case 'Tab':
+                            e.preventDefault();
+                            UI.toggleInventory();
+                            break;
+                        case 'Escape':
+                            UI.togglePause();
+                            break;
+                    }
+                });
+
+                document.addEventListener('keyup', (e) => {
+                    switch (e.code) {
+                        case 'KeyW': this.keys.W = false; break;
+                        case 'KeyS': this.keys.S = false; break;
+                        case 'KeyA': this.keys.A = false; break;
+                        case 'KeyD': this.keys.D = false; break;
+                        case 'ShiftLeft': this.keys.Shift = false; break;
+                    }
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!this.isLocked) return;
+                    const sensitivity = parseFloat(document.getElementById('setting-sensitivity').value) * 0.0022;
+                    this.yaw -= e.movementX * sensitivity;
+                    this.pitch -= e.movementY * sensitivity;
+                    this.pitch = Math.max(-Math.PI / 2.1, Math.min(Math.PI / 2.1, this.pitch));
+                });
+            }
+
+            update(delta) {
+                if (!this.isLocked) return;
+
+                // Battery Drain Logic
+                if (this.flashlightOn && this.battery > 0) {
+                    this.battery -= delta * 0.5; // Drains over ~200s
+                    UI.updateBatteryDisplay(this.battery);
+                    if (this.battery <= 0) {
+                        this.flashlightOn = false;
+                        world.flashlight.visible = false;
+                    }
+                }
+
+                // Camera Rotation Euler
+                const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+                euler.x = this.pitch;
+                euler.y = this.yaw;
+                this.camera.quaternion.setFromEuler(euler);
+
+                // Forward / Sideways Directions
+                const speed = (this.keys.Shift ? 3.5 : 2.0) * (this.keys.Crouch ? 0.5 : 1.0);
+                const moveVector = new THREE.Vector3();
+
+                if (this.keys.W) moveVector.z -= 1;
+                if (this.keys.S) moveVector.z += 1;
+                if (this.keys.A) moveVector.x -= 1;
+                if (this.keys.D) moveVector.x += 1;
+
+                if (moveVector.lengthSq() > 0) {
+                    moveVector.normalize();
+                    moveVector.applyEuler(new THREE.Euler(0, this.yaw, 0, 'YXZ'));
+                    this.position.addScaledVector(moveVector, speed * delta);
+
+                    // Footstep Audio Sync
+                    if (Math.random() < 0.05) {
+                        audio.playFootstep(this.keys.Shift);
+                    }
+                }
+
+                // Camera Height & Crouch smoothing
+                const targetHeight = this.keys.Crouch ? 1.0 : 1.6;
+                this.camera.position.set(this.position.x, this.position.y + targetHeight - 1.6, this.position.z);
+
+                // Update Flashlight position & direction
+                world.flashlight.position.copy(this.camera.position);
+                const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+                world.flashlight.target.position.copy(this.camera.position).add(dir);
+
+                // Dynamic Crosshair Raycasting
+                this.checkInteractions();
+            }
+
+            checkInteractions() {
+                this.raycaster.setFromCamera({ x: 0, y: 0 }, this.camera);
+                const intersects = this.raycaster.intersectObjects(world.interactables, false);
+
+                if (intersects.length > 0 && intersects[0].distance < 3.2) {
+                    const obj = intersects[0].object;
+                    if (obj.userData && obj.userData.interactable) {
+                        this.hoveredObject = obj;
+                        UI.showInteractionPrompt(obj.userData.prompt || "[E] Interact");
+                        return;
+                    }
+                }
+
+                this.hoveredObject = null;
+                UI.hideInteractionPrompt();
+            }
+
+            interact() {
+                if (this.hoveredObject && this.hoveredObject.userData.action) {
+                    this.hoveredObject.userData.action();
+                }
+            }
+        }
+
+        const player = new PlayerController();
+
+        // ==========================================
+        // 6. "THE GUEST" ENTITY AI & STALKING
+        // ==========================================
+        class GuestEntity {
+            constructor() {
+                this.mesh = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.3, 0.3, 2.2, 12),
+                    new THREE.MeshBasicMaterial({ color: 0x020202, wireframe: false })
+                );
+                this.mesh.position.set(0, -100, 0); // Hide initially
+                world.scene.add(this.mesh);
+
+                this.active = false;
+                this.stalkTimer = 0;
+            }
+
+            spawnAt(x, y, z) {
+                this.mesh.position.set(x, y + 1.1, z);
+                this.active = true;
+                audio.triggerHeartbeat(true);
+                audio.playStaticSting();
+            }
+
+            despawn() {
+                this.active = false;
+                this.mesh.position.set(0, -100, 0);
+                audio.triggerHeartbeat(false);
+            }
+
+            update(delta) {
+                if (!this.active) return;
+
+                // Look at player
+                this.mesh.lookAt(player.camera.position.x, this.mesh.position.y, player.camera.position.z);
+
+                // Distance check to player
+                const dist = this.mesh.position.distanceTo(player.camera.position);
+                if (dist < 2.0) {
+                    // Encounter Jump Scare Effect
+                    audio.playStaticSting();
+                    UI.showSubtitle("THE GUEST IS HERE.");
+                    this.despawn();
+                }
+            }
+        }
+
+        const guestEntity = new GuestEntity();
+
+        // ==========================================
+        // 7. USER INTERFACE & HUD MANAGEMENT
+        // ==========================================
+        class UIManager {
+            constructor() {
+                this.crosshair = document.getElementById('crosshair');
+                this.prompt = document.getElementById('interaction-prompt');
+                this.subtitleBox = document.getElementById('subtitle-box');
+                this.subtitleTimeout = null;
+
+                this.inventoryModal = document.getElementById('inventory-modal');
+                this.pauseModal = document.getElementById('pause-modal');
+                this.cctvModal = document.getElementById('cctv-modal');
+                this.mainMenu = document.getElementById('main-menu');
+                this.endingScreen = document.getElementById('ending-screen');
+
+                this.bindUIEvents();
+            }
+
+            bindUIEvents() {
+                // Main Menu Buttons
+                document.getElementById('btn-start').addEventListener('click', () => this.startGame());
+                document.getElementById('btn-continue').addEventListener('click', () => {
+                    if (state.load()) this.startGame(true);
+                });
+
+                // Inventory Tabs
+                document.getElementById('tab-btn-items').addEventListener('click', () => {
+                    document.getElementById('inventory-view-items').classList.remove('hidden');
+                    document.getElementById('inventory-view-notes').classList.add('hidden');
+                });
+                document.getElementById('tab-btn-notes').addEventListener('click', () => {
+                    document.getElementById('inventory-view-items').classList.add('hidden');
+                    document.getElementById('inventory-view-notes').classList.remove('hidden');
+                });
+                document.getElementById('btn-close-inventory').addEventListener('click', () => this.toggleInventory());
+
+                // Pause Options
+                document.getElementById('btn-resume').addEventListener('click', () => this.togglePause());
+                document.getElementById('btn-save-game').addEventListener('click', () => state.save());
+                document.getElementById('btn-quit').addEventListener('click', () => location.reload());
+
+                // CCTV Keypad buttons
+                document.querySelectorAll('.cctv-key-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const display = document.getElementById('cctv-code-display');
+                        if (display.textContent === '----') display.textContent = '';
+                        if (display.textContent.length < 4) {
+                            display.textContent += e.target.textContent;
+                        }
+                    });
+                });
+                document.getElementById('cctv-key-clear').addEventListener('click', () => {
+                    document.getElementById('cctv-code-display').textContent = '----';
+                });
+                document.getElementById('cctv-key-enter').addEventListener('click', () => {
+                    const code = document.getElementById('cctv-code-display').textContent;
+                    if (code === '0404' || code === '404') {
+                        state.flags.cctvSolved = true;
+                        this.showSubtitle("OVERRIDE ACCEPTED: ROOM 404 ACCESS GRANTED");
+                        this.closeCCTVTerminal();
+                        state.setObjective("Return to the Floor 4 hallway. Door 404 has unlocked.");
+                    } else {
+                        audio.playStaticSting();
+                        document.getElementById('cctv-code-display').textContent = 'ERR';
+                    }
+                });
+                document.getElementById('btn-exit-cctv').addEventListener('click', () => this.closeCCTVTerminal());
+            }
+
+            startGame(isContinue = false) {
+                audio.init();
+                this.mainMenu.classList.add('opacity-0');
+                setTimeout(() => this.mainMenu.classList.add('hidden'), 700);
+
+                // Lock Pointer
+                document.body.requestPointerLock();
+                player.isLocked = true;
+
+                if (!isContinue) {
+                    this.showSubtitle("11:59 PM - Arrived at Hotel reception desk.");
+                    state.setObjective("Pick up Room 401 key at reception.");
+                }
+            }
+
+            showInteractionPrompt(text) {
+                this.crosshair.classList.add('active');
+                this.prompt.textContent = text;
+                this.prompt.classList.remove('opacity-0');
+            }
+
+            hideInteractionPrompt() {
+                this.crosshair.classList.remove('active');
+                this.prompt.classList.add('opacity-0');
+            }
+
+            showSubtitle(text) {
+                this.subtitleBox.textContent = text;
+                this.subtitleBox.classList.remove('opacity-0');
+                if (this.subtitleTimeout) clearTimeout(this.subtitleTimeout);
+                this.subtitleTimeout = setTimeout(() => {
+                    this.subtitleBox.classList.add('opacity-0');
+                }, 4500);
+            }
+
+            updateObjective(text) {
+                const box = document.getElementById('objective-box');
+                const label = document.getElementById('objective-text');
+                label.textContent = text;
+                box.classList.remove('opacity-0', '-translate-x-4');
+            }
+
+            updateBatteryDisplay(batteryPercent) {
+                const segments = document.querySelectorAll('.battery-segment');
+                const count = Math.ceil((batteryPercent / 100) * 4);
+                segments.forEach((seg, idx) => {
+                    if (idx < count) {
+                        seg.style.opacity = '1';
+                    } else {
+                        seg.style.opacity = '0.15';
+                    }
+                });
+            }
+
+            toggleInventory() {
+                const hidden = this.inventoryModal.classList.contains('hidden');
+                if (hidden) {
+                    this.inventoryModal.classList.remove('hidden');
+                    document.exitPointerLock();
+                    player.isLocked = false;
+                } else {
+                    this.inventoryModal.classList.add('hidden');
+                    document.body.requestPointerLock();
+                    player.isLocked = true;
+                }
+            }
+
+            togglePause() {
+                const hidden = this.pauseModal.classList.contains('hidden');
+                if (hidden) {
+                    this.pauseModal.classList.remove('hidden');
+                    document.exitPointerLock();
+                    player.isLocked = false;
+                } else {
+                    this.pauseModal.classList.add('hidden');
+                    document.body.requestPointerLock();
+                    player.isLocked = true;
+                }
+            }
+
+            updateInventoryGrid() {
+                const grid = document.getElementById('inventory-grid');
+                grid.innerHTML = '';
+                state.inventory.forEach(item => {
+                    const el = document.createElement('div');
+                    el.className = 'bg-gray-900 border border-gray-800 p-3 rounded cursor-pointer hover:border-red-600 transition';
+                    el.innerHTML = `<div class="font-cinzel text-sm text-red-400 font-bold">${item.name}</div>`;
+                    el.onclick = () => {
+                        document.getElementById('item-detail-title').textContent = item.name;
+                        document.getElementById('item-detail-desc').textContent = item.description;
+                        document.getElementById('item-detail-tag').textContent = item.tag;
+                    };
+                    grid.appendChild(el);
+                });
+            }
+
+            updateNotesList() {
+                const list = document.getElementById('notes-list');
+                list.innerHTML = '';
+                state.clues.forEach(clue => {
+                    const el = document.createElement('div');
+                    el.className = 'p-2 bg-gray-900 border border-gray-800 rounded cursor-pointer hover:border-gray-600 text-xs text-gray-300';
+                    el.textContent = clue.title;
+                    el.onclick = () => {
+                        document.getElementById('note-reader').textContent = clue.text;
+                    };
+                    list.appendChild(el);
+                });
+            }
+
+            openCCTVTerminal() {
+                this.cctvModal.classList.remove('hidden');
+                document.exitPointerLock();
+                player.isLocked = false;
+            }
+
+            closeCCTVTerminal() {
+                this.cctvModal.classList.add('hidden');
+                document.body.requestPointerLock();
+                player.isLocked = true;
+            }
+
+            triggerEnding(title, subtitle) {
+                document.exitPointerLock();
+                player.isLocked = false;
+                this.endingScreen.classList.remove('hidden');
+                document.getElementById('ending-title').textContent = title;
+                document.getElementById('ending-subtitle').textContent = subtitle;
+            }
+        }
+
+        const UI = new UIManager();
+
+        // ==========================================
+        // 8. POST-PROCESSING FX & GAME LOOP
+        // ==========================================
+        const fxCanvas = document.getElementById('fx-overlay');
+        const fxCtx = fxCanvas.getContext('2d');
+
+        function resizeFXCanvas() {
+            fxCanvas.width = window.innerWidth;
+            fxCanvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', () => {
+            resizeFXCanvas();
+            world.camera.aspect = window.innerWidth / window.innerHeight;
+            world.camera.updateProjectionMatrix();
+            world.renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        resizeFXCanvas();
+
+        function renderFXOverlay() {
+            fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+
+            // Dark Radial Vignette
+            const gradient = fxCtx.createRadialGradient(
+                fxCanvas.width / 2, fxCanvas.height / 2, fxCanvas.width * 0.25,
+                fxCanvas.width / 2, fxCanvas.height / 2, fxCanvas.width * 0.7
+            );
+            gradient.addColorStop(0, 'rgba(0,0,0,0)');
+            gradient.addColorStop(1, 'rgba(0,0,0,0.85)');
+            fxCtx.fillStyle = gradient;
+            fxCtx.fillRect(0, 0, fxCanvas.width, fxCanvas.height);
+        }
+
+        // Main Animation Clock
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = Math.min(clock.getDelta(), 0.1);
+
+            // Update Systems
+            player.update(delta);
+            guestEntity.update(delta);
+
+            // Render 3D Scene
+            world.renderer.render(world.scene, world.camera);
+
+            // Render Post-FX
+            renderFXOverlay();
+        }
+
+        window.onload = () => {
+            animate();
+        };
+    </script>
+</body>
+</html>

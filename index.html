@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arcade Select</title>
+    <!-- Import retro pixel fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'VT323', monospace;
+            background-color: #050510;
+            background-image: 
+                linear-gradient(rgba(0, 255, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 255, 255, 0.05) 1px, transparent 1px);
+            background-size: 20px 20px;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        h1 {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 1.5rem;
+            color: #ff00ff;
+            text-shadow: 0 0 10px #ff00ff, 0 0 20px #ff00ff;
+            margin-bottom: 30px;
+            text-align: center;
+            animation: flicker 3s infinite alternate;
+        }
+
+        @keyframes flicker {
+            0%, 18%, 22%, 25%, 53%, 57%, 100% { opacity: 1; }
+            20%, 24%, 55% { opacity: 0.5; }
+        }
+
+        ul {
+            list-style-type: none;
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        li {
+            background: #111;
+            border: 2px solid #00ffff;
+            border-radius: 4px;
+            padding: 15px;
+            box-shadow: 0 0 10px #00ffff, inset 0 0 10px #00ffff;
+            transition: all 0.2s ease-in-out;
+            position: relative;
+            overflow: hidden;
+        }
+
+        li::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: #00ffff;
+            animation: scanline 2s linear infinite;
+        }
+
+        @keyframes scanline {
+            0% { top: -10%; }
+            100% { top: 110%; }
+        }
+
+        li:hover {
+            transform: scale(1.02);
+            border-color: #ff00ff;
+            box-shadow: 0 0 20px #ff00ff, inset 0 0 15px #ff00ff;
+            cursor: pointer;
+        }
+
+        li:hover::before {
+            background: #ff00ff;
+        }
+
+        a {
+            text-decoration: none;
+            color: #fff;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 0.8rem;
+            display: block;
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-shadow: 0 0 5px #fff;
+        }
+
+        li:hover a {
+            color: #ff00ff;
+            text-shadow: 0 0 10px #ff00ff;
+        }
+
+        /* Insert Coin/Game Over styles */
+        .loading {
+            font-family: 'Press Start 2P', cursive;
+            color: #ffff00;
+            text-shadow: 0 0 10px #ffff00;
+            text-align: center;
+            padding: 20px;
+            animation: blink 1s step-start infinite;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
+
+        .error {
+            color: #ff0000;
+            border-color: #ff0000;
+            box-shadow: 0 0 15px #ff0000, inset 0 0 15px #ff0000;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 0.8rem;
+            text-align: center;
+            padding: 20px;
+            text-shadow: 0 0 5px #ff0000;
+        }
+
+        /* Subtle background grid animation */
+        body::after {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.15),
+                rgba(0, 0, 0, 0.15) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>SELECT YOUR GAME</h1>
+    <ul id="file-list">
+        <li class="loading">LOADING...</li>
+    </ul>
+
+    <script>
+        // Fetch the list.json file from the same directory
+        fetch('list.json')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                const fileListContainer = document.getElementById('file-list');
+                fileListContainer.innerHTML = ''; // Clear the "Loading..." message
+
+                // Loop through the JSON array and create list items
+                data.forEach(item => {
+                    const li = document.createElement('li');
+                    const a = document.createElement('a');
+
+                    // Set the displayed name and the link target based on your JSON structure
+                    // Prepending a game icon to make it feel more arcade-like
+                    a.textContent = '▶ ' + item.Name;
+                    a.href = item["File name"];
+
+                    li.appendChild(a);
+                    fileListContainer.appendChild(li);
+                });
+            })
+            .catch(error => {
+                console.error('Error fetching file list:', error);
+                const fileListContainer = document.getElementById('file-list');
+                fileListContainer.innerHTML = '<li class="error">GAME OVER<br><br>FAILED TO LOAD LIST.JSON</li>';
+            });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CYBER ARCADE // LIVE</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'VT323', monospace;
+            background-color: #03030a;
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 40px 20px;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Live Neon Glowing Canvas Background */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            z-index: 2;
+        }
+
+        h1 {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 1.8rem;
+            color: #00ffff;
+            text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 40px #00ffff;
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+            animation: titleGlow 2s infinite alternate;
+        }
+
+        @keyframes titleGlow {
+            0% {
+                color: #00ffff;
+                text-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff;
+            }
+            100% {
+                color: #ff00ff;
+                text-shadow: 0 0 15px #ff00ff, 0 0 30px #ff00ff, 0 0 50px #ff00ff;
+            }
+        }
+
+        p.subtitle {
+            font-size: 1.2rem;
+            color: #a0a0c0;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+        }
+
+        /* Game List Container */
+        ul {
+            list-style-type: none;
+            width: 100%;
+            max-width: 650px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            z-index: 2;
+        }
+
+        li {
+            background: rgba(10, 10, 25, 0.75);
+            backdrop-filter: blur(8px);
+            border: 2px solid rgba(0, 255, 255, 0.4);
+            border-radius: 8px;
+            padding: 18px 24px;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.15), inset 0 0 15px rgba(0, 255, 255, 0.05);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Neon scanline accent on cards */
+        li::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.2), transparent);
+            transition: 0.5s;
+        }
+
+        li:hover::before {
+            left: 100%;
+        }
+
+        li:hover {
+            transform: translateY(-4px) scale(1.02);
+            border-color: #ff00ff;
+            background: rgba(25, 10, 35, 0.85);
+            box-shadow: 0 0 25px rgba(255, 0, 255, 0.5), inset 0 0 20px rgba(255, 0, 255, 0.2);
+        }
+
+        a {
+            text-decoration: none;
+            color: #ffffff;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 0.85rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+
+        .play-icon {
+            color: #00ffff;
+            transition: transform 0.3s ease;
+        }
+
+        li:hover .play-icon {
+            color: #ff00ff;
+            transform: translateX(6px);
+            text-shadow: 0 0 10px #ff00ff;
+        }
+
+        /* Cinematic Vignette Overlay */
+        .vignette {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.9);
+            pointer-events: none;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="bg-canvas"></canvas>
+    <div class="vignette"></div>
+
+    <header>
+        <h1>ARCADE NEXUS</h1>
+        <p class="subtitle">// Select Mission Protocol //</p>
+    </header>
+
+    <ul id="file-list">
+        <!-- Dynamic Game List -->
+    </ul>
+
+    <script>
+        // Live Neon Background Particle & Grid Animation
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        const particles = [];
+        const numParticles = 50;
+
+        for (let i = 0; i < numParticles; i++) {
+            particles.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                radius: Math.random() * 2 + 1,
+                color: Math.random() > 0.5 ? '#00ffff' : '#ff00ff',
+                vx: (Math.random() - 0.5) * 0.8,
+                vy: (Math.random() - 0.5) * 0.8
+            });
+        }
+
+        function animate() {
+            ctx.fillStyle = 'rgba(3, 3, 10, 0.2)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw subtle cyber grid
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.03)';
+            ctx.lineWidth = 1;
+            const gridSize = 40;
+            for (let x = 0; x < canvas.width; x += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < canvas.height; y += gridSize) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+
+            // Update & draw glowing particles
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+
+                if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+                if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = p.color;
+                ctx.fill();
+                ctx.shadowBlur = 0; // reset
+            });
+
+            requestAnimationFrame(animate);
+        }
+        animate();
+
+        // Embedded Game List Data (No external fetch needed, works offline / file:// protocol)
+        const games = [
+            { "Name": "Enemy Game", "File name": "enemy.html" },
+            { "Name": "3D Speed Racer (Alt)", "File name": "3d_speed_racer (1).html" },
+            { "Name": "3D Speed Racer", "File name": "3d_speed_racer.html" },
+            { "Name": "My Newest Game", "File name": "mynewestgame.html" },
+            { "Name": "Deepseek Game 4", "File name": "deepseek_html_20260928_793b3d (2).html" },
+            { "Name": "Deepseek Game 3", "File name": "deepseek_html_20260928_793b3d (1).html" },
+            { "Name": "Deepseek Game 2", "File name": "deepseek_html_20260928_793b3d.html" },
+            { "Name": "Deepseek Game 1", "File name": "deepseek_html_20260928_16c043.html" },
+            { "Name": "Football Match", "File name": "football.html" },
+            { "Name": "Room 404 Horror", "File name": "room_404_horror_game.html" },
+            { "Name": "The Backrooms Survival Horror", "File name": "the_backrooms_survival_horror.html" }
+        ];
+
+        const container = document.getElementById('file-list');
+        container.innerHTML = '';
+
+        games.forEach(game => {
+            const li = document.createElement('li');
+            const a = document.createElement('a');
+            
+            a.href = game["File name"];
+            a.innerHTML = `<span>${game.Name}</span> <span class="play-icon">▶</span>`;
+            
+            li.appendChild(a);
+            container.appendChild(li);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,2586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Marvel's Spider-Man Remastered — Core Project</title>
+<style>
+  html, body { margin:0; padding:0; height:100%; overflow:hidden; background:#000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", sans-serif;
+    color:#fff; user-select:none; }
+  canvas { display:block; }
+  #fade { position:fixed; inset:0; background:#000; z-index:100; opacity:1; pointer-events:none; transition: opacity 1.1s ease; }
+  #fade.clear { opacity:0; }
+  #vignette { position:fixed; inset:0; pointer-events:none; z-index:5;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,0.75) 100%);
+    opacity:0; transition: opacity 0.2s linear; mix-blend-mode: multiply; }
+  #hitFlash { position:fixed; inset:0; pointer-events:none; z-index:6;
+    background: radial-gradient(ellipse at center, rgba(255,30,30,0) 40%, rgba(255,20,20,0.75) 100%);
+    opacity:0; transition: opacity 0.15s linear; mix-blend-mode: screen; }
+  #menu { position:fixed; inset:0; z-index:20; pointer-events:none;
+    display:flex; align-items:flex-end; justify-content:flex-start; padding: 0 0 8vh 7vw;
+    transition: opacity 1.6s ease, filter 1.6s ease, transform 1.6s ease; }
+  #menu.hidden { opacity:0; }
+  #menu.fading { opacity:0.4; filter: blur(4px); transform: translateY(-10px); }
+  #menu.gone { display: none !important; }
+  .menu-title { line-height: 0.95; text-transform: uppercase; }
+  .menu-title .marvel { display: inline-block; background: #e62429; color: #fff;
+    font-size: 12px; font-weight: 800; letter-spacing: 0.35em;
+    padding: 4px 12px 4px 14px; margin-bottom: 22px; box-shadow: 0 4px 30px rgba(230,36,41,0.4); }
+  .menu-title .main { font-size: clamp(38px, 6.4vw, 92px); font-weight: 900; letter-spacing: 0.02em;
+    text-shadow: 0 6px 60px rgba(0,0,0,0.9), 0 2px 12px rgba(0,0,0,0.95);
+    font-family: "Helvetica Neue", "Arial Black", sans-serif; }
+  .menu-title .sub { display: block; font-size: clamp(14px, 1.6vw, 22px); font-weight: 300;
+    letter-spacing: 0.62em; color: rgba(255,255,255,0.85); margin-top: 14px;
+    text-shadow: 0 2px 20px rgba(0,0,0,0.9); }
+  .menu-prompt { margin-top: 52px; font-size: 11px; letter-spacing: 0.5em; text-transform: uppercase;
+    color: rgba(255,255,255,0.7); animation: pulse 2.4s ease-in-out infinite; font-weight: 500; }
+  .menu-prompt .dot { color: #e62429; }
+  @keyframes pulse { 0%,100% { opacity: 0.35; } 50% { opacity: 1; } }
+  .menu-corner { position:fixed; right: 5vw; bottom: 8vh; font-size: 10px;
+    letter-spacing: 0.35em; text-transform: uppercase; color: rgba(255,255,255,0.28);
+    text-align: right; line-height: 2; }
+  .menu-corner .pc { display: inline-block; background: #000; color: #fff; font-weight: 700;
+    font-size: 11px; letter-spacing: 0.15em; padding: 3px 10px; margin-bottom: 8px;
+    border: 1px solid rgba(255,255,255,0.3); }
+  #hud { position:fixed; inset:0; z-index:10; pointer-events:none; opacity:0; transition: opacity 1.4s ease 0.5s; }
+  #hud.visible { opacity:1; }
+  .hud-hint { position:absolute; bottom: 20px; left: 22px; display:flex; gap: 12px; align-items:center;
+    font-size: 9px; letter-spacing: 0.24em; text-transform: uppercase;
+    color: rgba(255,255,255,0.5); text-shadow: 0 2px 6px rgba(0,0,0,0.9); flex-wrap: wrap; max-width: 60vw; }
+  .hud-hint .k { display:inline-block; padding: 3px 7px; border: 1px solid rgba(255,255,255,0.28);
+    border-radius: 4px; font-family: ui-monospace, Menlo, monospace; font-size: 9px;
+    color: rgba(255,255,255,0.85); margin-right: 5px;
+    background: rgba(255,255,255,0.04); backdrop-filter: blur(4px); }
+  .hud-speed { position:absolute; bottom: 20px; right: 24px; text-align: right;
+    font-family: ui-monospace, Menlo, monospace; font-size: 9px; letter-spacing: 0.3em;
+    color: rgba(255,255,255,0.45); text-shadow: 0 2px 6px rgba(0,0,0,0.9); }
+  .hud-speed .val { display:block; font-size: 24px; font-weight: 700; color:#fff; }
+  #damageReadout { position:absolute; bottom: 20px; right: 130px; text-align: right;
+    font-family: ui-monospace, Menlo, monospace; font-size: 9px; letter-spacing: 0.25em;
+    color: rgba(255,140,140,0.55); text-shadow: 0 2px 6px rgba(0,0,0,0.9);
+    transition: opacity 0.4s ease; opacity: 0; }
+  #damageReadout.active { opacity: 1; }
+  #damageReadout .val { display:block; font-size: 18px; font-weight: 700; color:#ff6060; }
+  #comboReadout { position:absolute; top: 40%; left: 40px; text-align: left;
+    font-family: "Helvetica Neue", sans-serif;
+    font-size: 32px; font-weight: 800; letter-spacing: 0.02em;
+    color: #fff; text-shadow: 0 2px 20px rgba(255,60,60,0.7), 0 2px 8px rgba(0,0,0,0.95);
+    opacity: 0; transition: opacity 0.25s ease, transform 0.25s ease;
+    transform: scale(0.8); }
+  #comboReadout.show { opacity: 1; transform: scale(1); }
+  #comboReadout .c { color: #e62429; font-size: 42px; }
+  #clickHint { position:fixed; inset:0; z-index:15; display:flex; align-items:center; justify-content:center;
+    pointer-events:none; font-size: 10px; letter-spacing: 0.5em; text-transform: uppercase;
+    color: rgba(255,255,255,0.65); opacity:0; transition: opacity 0.6s ease; }
+  #clickHint.show { opacity:1; }
+</style>
+</head>
+<body>
+
+<div id="app"></div>
+<div id="vignette"></div>
+<div id="hitFlash"></div>
+
+<div id="menu">
+  <div>
+    <div class="menu-title">
+      <span class="marvel">Marvel</span>
+      <div class="main">Spider-Man</div>
+      <span class="sub">Remastered</span>
+    </div>
+    <div class="menu-prompt">Press <span class="dot">ENTER</span> to begin</div>
+  </div>
+  <div class="menu-corner">
+    <span class="pc">PC</span><br>
+    Manhattan · Winter · 9:47 PM
+  </div>
+</div>
+
+<div id="hud">
+  <div class="hud-hint" id="hudHint">
+    <span><span class="k">WASD</span>Move</span>
+    <span><span class="k">SPACE</span>Swing</span>
+    <span><span class="k">SHIFT</span>Dive</span>
+    <span><span class="k">D</span>Punch</span>
+    <span><span class="k">F</span>Web</span>
+    <span><span class="k">MOUSE</span>Look</span>
+  </div>
+  <div class="hud-speed"><span class="val" id="speedVal">0</span>KM/H</div>
+  <div id="damageReadout"><span class="val" id="dmgVal">0</span>SUIT DMG</div>
+  <div id="comboReadout"><span class="c" id="comboVal">2</span>HIT COMBO</div>
+</div>
+
+<div id="clickHint">Click to look around</div>
+<div id="fade" class="clear"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const CONFIG = {
+  city: { blocksX: 22, blocksZ: 22, blockW: 34, blockD: 58, streetW: 20, streetD: 14, minHeight: 24, maxHeight: 340 },
+  player: { radius: 0.5, walkSpeed: 6.2, runSpeed: 13.5, airControl: 0.72, jumpForce: 14, gravity: -34, maxFall: -90, groundFriction: 10 },
+  swing: { minRope: 6, maxRope: 110, idealDistance: 38, reelInSpeed: 20, reelOutSpeed: 24, pumpForce: 30,
+           releaseBoost: 1.05, releaseLift: 2.5, ropeStiffness: 0.88, ropeDamping: 0.88, minAirTime: 0.05 },
+  camera: { baseDistance: 5.8, speedDistanceGain: 0.14, height: 1.7, smooth: 8, fovBase: 58, fovSprint: 88,
+            mouseSensitivity: 0.0022, inverted: false },
+  render: { fogNear: 100, fogFar: 850, bloomStrength: 0.32, bloomRadius: 0.55, bloomThreshold: 0.85 },
+  systems: { carCount: 60, pedestrianCount: 90, trafficSpeedMin: 8, trafficSpeedMax: 16, pedSpeedMin: 1.0, pedSpeedMax: 2.0 },
+  wall: { detectRange: 1.4, stickTime: 0.15, crawlSpeed: 4.5, climbSpeed: 3.5, detachJump: 8, standoff: 0.5 },
+  combat: {
+    punchDuration: 0.35, punchReach: 2.6, punchDamage: 34, punchKnockback: 7,
+    webDuration: 0.4, webRange: 32, webImmobilizeTime: 5.0,
+    enemyHealth: 100, enemyDamage: 0.06,
+    comboTimeout: 1.4,
+  },
+};
+
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const lerp  = (a,b,t) => a + (b-a) * t;
+const damp  = (a,b,l,dt) => lerp(a, b, 1 - Math.exp(-l * dt));
+const rand  = (a,b) => a + Math.random() * (b - a);
+
+function mulberry32(seed) {
+  return function () {
+    let t = (seed += 0x6D2B79F5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const rng = mulberry32(90210);
+
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', stencil: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0x1a2338, CONFIG.render.fogNear, CONFIG.render.fogFar);
+const camera = new THREE.PerspectiveCamera(CONFIG.camera.fovBase, window.innerWidth / window.innerHeight, 0.1, 3500);
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight),
+  CONFIG.render.bloomStrength, CONFIG.render.bloomRadius, CONFIG.render.bloomThreshold);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+const SUN_DIR = new THREE.Vector3(-0.35, 0.12, -0.9).normalize();
+
+function buildSky() {
+  const mat = new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false,
+    uniforms: {
+      uTop:  { value: new THREE.Color(0x040814) }, uMid: { value: new THREE.Color(0x121a30) },
+      uBot:  { value: new THREE.Color(0x3a3448) }, uGlow: { value: new THREE.Color(0xd07a54) },
+      uSun:  { value: SUN_DIR.clone() },
+    },
+    vertexShader: `varying vec3 vDir; void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `
+      uniform vec3 uTop, uMid, uBot, uGlow, uSun; varying vec3 vDir;
+      void main() {
+        float h = vDir.y;
+        vec3 c = mix(uBot, uMid, smoothstep(-0.15, 0.32, h));
+        c = mix(c, uTop, smoothstep(0.18, 0.9, h));
+        float horiz = exp(-abs(h) * 6.0);
+        c = mix(c, uGlow, horiz * 0.28);
+        float d = max(dot(normalize(vDir), normalize(uSun)), 0.0);
+        c += uGlow * pow(d, 90.0) * 0.55 + uGlow * pow(d, 6.0) * 0.05;
+        gl_FragColor = vec4(c, 1.0);
+      }`,
+  });
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(2400, 32, 16), mat);
+  sky.frustumCulled = false;
+  return sky;
+}
+scene.add(buildSky());
+const sun = new THREE.DirectionalLight(0xffb890, 1.05);
+sun.position.copy(SUN_DIR).multiplyScalar(400);
+scene.add(sun);
+scene.add(new THREE.HemisphereLight(0x5d6d96, 0x0a0c14, 0.85));
+const rim = new THREE.DirectionalLight(0x8ea8e0, 0.7);
+rim.position.set(-SUN_DIR.x * 250, 180, -SUN_DIR.z * 250);
+scene.add(rim);
+const cityGlow = new THREE.DirectionalLight(0xff9a55, 0.28);
+cityGlow.position.set(0, -1, 0);
+scene.add(cityGlow);
+
+function buildSnow() {
+  const COUNT = 2800, RANGE = 140;
+  const pos = new Float32Array(COUNT * 3), spd = new Float32Array(COUNT), siz = new Float32Array(COUNT);
+  for (let i = 0; i < COUNT; i++) {
+    pos[i*3]   = rand(-RANGE, RANGE); pos[i*3+1] = rand(-RANGE, RANGE); pos[i*3+2] = rand(-RANGE, RANGE);
+    spd[i] = rand(1.2, 3.6); siz[i] = rand(1.0, 2.6);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aSpeed', new THREE.BufferAttribute(spd, 1));
+  geo.setAttribute('aSize', new THREE.BufferAttribute(siz, 1));
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false,
+    uniforms: { uTime: { value: 0 }, uCamPos: { value: new THREE.Vector3() }, uRange: { value: RANGE } },
+    vertexShader: `
+      attribute float aSpeed; attribute float aSize;
+      uniform float uTime; uniform vec3 uCamPos; uniform float uRange;
+      varying float vAlpha;
+      void main() {
+        vec3 p = position;
+        float fall = mod(uTime * aSpeed, uRange * 2.0);
+        p.y = mod(p.y - fall + uRange * 2.0, uRange * 2.0) - uRange;
+        p.x = mod(p.x - uCamPos.x + uRange, uRange * 2.0) - uRange + uCamPos.x;
+        p.z = mod(p.z - uCamPos.z + uRange, uRange * 2.0) - uRange + uCamPos.z;
+        p.y = p.y + uCamPos.y + uRange * 0.35;
+        p.x += sin(uTime * 0.35 + position.z * 0.03) * 1.4;
+        p.z += cos(uTime * 0.28 + position.x * 0.03) * 1.4;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mv;
+        float dist = -mv.z;
+        gl_PointSize = min(aSize * (220.0 / max(dist, 0.5)), 18.0);
+        vAlpha = smoothstep(3.0, 10.0, dist) * smoothstep(190.0, 70.0, dist) * 0.85;
+      }`,
+    fragmentShader: `varying float vAlpha;
+      void main() { vec2 c = gl_PointCoord - 0.5; float d = length(c); float a = smoothstep(0.5, 0.15, d);
+        if (a < 0.02) discard; gl_FragColor = vec4(1.0, 1.0, 1.0, a * vAlpha); }`,
+  });
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false;
+  pts.userData.uniforms = mat.uniforms;
+  return pts;
+}
+const snow = buildSnow();
+scene.add(snow);
+
+const buildingMat = new THREE.MeshStandardMaterial({ color: 0x2a2e3c, roughness: 0.9, metalness: 0.06 });
+buildingMat.onBeforeCompile = (shader) => {
+  shader.vertexShader = shader.vertexShader
+    .replace('#include <common>', `#include <common>
+      varying vec3 vWPos; varying vec3 vNrm; varying float vInstId;`)
+    .replace('#include <begin_vertex>', `#include <begin_vertex>
+      #ifdef USE_INSTANCING
+        vWPos = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+        vNrm  = normalize(mat3(instanceMatrix) * objectNormal);
+        vInstId = float(gl_InstanceID);
+      #else
+        vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
+        vNrm  = normalize(objectNormal);
+        vInstId = 0.0;
+      #endif`);
+  shader.fragmentShader = shader.fragmentShader
+    .replace('#include <common>', `#include <common>
+      varying vec3 vWPos; varying vec3 vNrm; varying float vInstId;
+      float hash21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }`)
+    .replace('#include <tonemapping_fragment>', `
+      {
+        vec3 n = abs(vNrm);
+        float side = step(0.5, 1.0 - n.y);
+        vec2 wuv;
+        if (n.x > n.z) wuv = vec2(vWPos.z, vWPos.y);
+        else           wuv = vec2(vWPos.x, vWPos.y);
+        float styleSeed = hash21(vec2(vInstId, 1.7));
+        float wx = mix(1.5, 2.2, step(0.6, styleSeed));
+        float wy = mix(1.9, 2.6, step(0.6, styleSeed));
+        vec2 cell = floor(wuv / vec2(wx, wy));
+        vec2 f    = fract(wuv / vec2(wx, wy));
+        float inW = step(0.22, f.x) * step(f.x, 0.78) * step(0.26, f.y) * step(f.y, 0.74);
+        float lit = step(0.50, hash21(cell + 0.31));
+        float warm = hash21(cell + 7.19);
+        vec3 winCol = mix(vec3(1.0, 0.80, 0.48), vec3(0.55, 0.78, 1.0), warm);
+        gl_FragColor.rgb += winCol * lit * inW * side * 1.35;
+      }
+      #include <tonemapping_fragment>`);
+};
+
+function buildGround() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 1024;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#0a0c12';
+  ctx.fillRect(0, 0, 1024, 1024);
+  for (let i = 0; i < 6000; i++) {
+    ctx.fillStyle = `rgba(120,130,160,${Math.random() * 0.04})`;
+    ctx.fillRect(Math.random() * 1024, Math.random() * 1024, 1, 1);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(80, 80);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(2600, 2600),
+    new THREE.MeshStandardMaterial({ map: tex, roughness: 0.95, metalness: 0.0 }));
+  m.rotation.x = -Math.PI / 2;
+  m.position.y = -0.02;
+  return m;
+}
+scene.add(buildGround());
+
+const buildings = [];
+const cityParams = {};
+
+function generateCity() {
+  const { blocksX, blocksZ, blockW, blockD, streetW, streetD, minHeight, maxHeight } = CONFIG.city;
+  const strideX = blockW + streetW, strideZ = blockD + streetD;
+  const totalX = blocksX * strideX, totalZ = blocksZ * strideZ;
+  const originX = -totalX / 2 + strideX / 2, originZ = -totalZ / 2 + strideZ / 2;
+  Object.assign(cityParams, { blocksX, blocksZ, blockW, blockD, streetW, streetD, strideX, strideZ, originX, originZ, totalX, totalZ });
+
+  const transforms = [];
+  for (let bx = 0; bx < blocksX; bx++) {
+    for (let bz = 0; bz < blocksZ; bz++) {
+      const centerX = originX + bx * strideX, centerZ = originZ + bz * strideZ;
+      const dc = Math.hypot(centerX, centerZ);
+      const bias = clamp(1 - dc / (totalX * 0.55), 0, 1);
+      const biasPow = Math.pow(bias, 1.4);
+      const lotZ = 3, lotW = 2;
+      for (let lz = 0; lz < lotZ; lz++) {
+        for (let lw = 0; lw < lotW; lw++) {
+          if (rng() > 0.72) continue;
+          const w = (blockW / lotW) - rand(2, 5), d = (blockD / lotZ) - rand(2, 5);
+          const cx = centerX - blockW/2 + (lw + 0.5) * (blockW / lotW) + rand(-1.5, 1.5);
+          const cz = centerZ - blockD/2 + (lz + 0.5) * (blockD / lotZ) + rand(-1.5, 1.5);
+          let h = lerp(minHeight, maxHeight, Math.pow(rng(), 1.7) * (0.22 + biasPow * 1.05));
+          if (rng() > 0.97 && bias > 0.55) h *= rand(1.3, 1.6);
+          const m = new THREE.Matrix4();
+          m.compose(new THREE.Vector3(cx, h / 2, cz), new THREE.Quaternion(), new THREE.Vector3(w, h, d));
+          transforms.push({ matrix: m, h, cx, cz, w, d });
+          buildings.push({ minX: cx - w/2, maxX: cx + w/2, minZ: cz - d/2, maxZ: cz + d/2, maxY: h, cx, cz, w, d });
+        }
+      }
+    }
+  }
+
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const mesh = new THREE.InstancedMesh(geo, buildingMat, transforms.length);
+  mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage);
+  const color = new THREE.Color();
+  for (let i = 0; i < transforms.length; i++) {
+    mesh.setMatrixAt(i, transforms[i].matrix);
+    const t = transforms[i].h / CONFIG.city.maxHeight;
+    const pal = rng();
+    if (pal < 0.35) color.setHSL(0.60, 0.06, 0.13 + t * 0.06);
+    else if (pal < 0.6) color.setHSL(0.09, 0.08, 0.16 + t * 0.05);
+    else if (pal < 0.82) color.setHSL(0.58, 0.10, 0.15 + t * 0.05);
+    else color.setHSL(0.62, 0.14, 0.10 + t * 0.05);
+    mesh.setColorAt(i, color);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  mesh.frustumCulled = false;
+  scene.add(mesh);
+  return mesh;
+}
+const cityMesh = generateCity();
+
+(function addSpires() {
+  const tall = buildings.filter(b => b.maxY > CONFIG.city.maxHeight * 0.55);
+  if (!tall.length) return;
+  const spireGeo = new THREE.CylinderGeometry(0.4, 1.0, 1, 6);
+  spireGeo.translate(0, 0.5, 0);
+  const spireMat = new THREE.MeshStandardMaterial({ color: 0x30343f, roughness: 0.7, metalness: 0.3 });
+  const mesh = new THREE.InstancedMesh(spireGeo, spireMat, tall.length);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion();
+  const heights = [];
+  for (let i = 0; i < tall.length; i++) {
+    const b = tall[i];
+    const spireH = Math.min(b.maxY * 0.22, 40) + rand(3, 10);
+    heights.push(spireH);
+    m.compose(new THREE.Vector3(b.cx, b.maxY, b.cz), q, new THREE.Vector3(Math.min(b.w, b.d) * 0.12, spireH, Math.min(b.w, b.d) * 0.12));
+    mesh.setMatrixAt(i, m);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  scene.add(mesh);
+  const beacon = new THREE.InstancedMesh(new THREE.SphereGeometry(0.6, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff2a2a }), tall.length);
+  for (let i = 0; i < tall.length; i++) {
+    const b = tall[i];
+    m.makeTranslation(b.cx, b.maxY + heights[i], b.cz);
+    beacon.setMatrixAt(i, m);
+  }
+  beacon.instanceMatrix.needsUpdate = true;
+  scene.add(beacon);
+  window.__beacons = beacon;
+})();
+
+(function snowCaps() {
+  const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.3, 1),
+    new THREE.MeshStandardMaterial({ color: 0xd8e2f0, roughness: 0.9, metalness: 0 }), buildings.length);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion();
+  for (let i = 0; i < buildings.length; i++) {
+    const b = buildings[i];
+    m.compose(new THREE.Vector3(b.cx, b.maxY + 0.15, b.cz), q, new THREE.Vector3(b.w * 0.99, 1, b.d * 0.99));
+    mesh.setMatrixAt(i, m);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  scene.add(mesh);
+})();
+
+(function buildSidewalks() {
+  const { blocksX, blocksZ, blockW, blockD, strideX, strideZ, originX, originZ } = cityParams;
+  const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(blockW + 3, 0.35, blockD + 3),
+    new THREE.MeshStandardMaterial({ color: 0x181b24, roughness: 0.9, metalness: 0.02 }), blocksX * blocksZ);
+  const m = new THREE.Matrix4();
+  let i = 0;
+  for (let bx = 0; bx < blocksX; bx++)
+    for (let bz = 0; bz < blocksZ; bz++) {
+      m.makeTranslation(originX + bx * strideX, 0.17, originZ + bz * strideZ);
+      mesh.setMatrixAt(i++, m);
+    }
+  mesh.instanceMatrix.needsUpdate = true;
+  scene.add(mesh);
+})();
+
+(function addStreetLamps() {
+  const { blocksX, blocksZ, blockW, blockD, strideX, strideZ, originX, originZ } = cityParams;
+  const positions = [];
+  for (let bx = 0; bx < blocksX; bx++) for (let bz = 0; bz < blocksZ; bz++) {
+    const cx = originX + bx * strideX, cz = originZ + bz * strideZ;
+    const hw = blockW / 2 + 1.1, hd = blockD / 2 + 1.1;
+    positions.push({ x: cx - hw, z: cz - hd }, { x: cx + hw, z: cz - hd }, { x: cx - hw, z: cz + hd }, { x: cx + hw, z: cz + hd });
+  }
+  const poleGeo = new THREE.CylinderGeometry(0.06, 0.09, 4.4, 6); poleGeo.translate(0, 2.2, 0);
+  const poleMesh = new THREE.InstancedMesh(poleGeo, new THREE.MeshStandardMaterial({ color: 0x1c1c22, roughness: 0.7, metalness: 0.55 }), positions.length);
+  const headGeo = new THREE.SphereGeometry(0.20, 8, 6); headGeo.scale(1, 0.7, 1);
+  const headMesh = new THREE.InstancedMesh(headGeo, new THREE.MeshBasicMaterial({ color: 0xffe0a0 }), positions.length);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1);
+  for (let i = 0; i < positions.length; i++) {
+    m.compose(new THREE.Vector3(positions[i].x, 0.35, positions[i].z), q, s); poleMesh.setMatrixAt(i, m);
+    m.compose(new THREE.Vector3(positions[i].x, 4.75, positions[i].z), q, s); headMesh.setMatrixAt(i, m);
+  }
+  poleMesh.instanceMatrix.needsUpdate = true; headMesh.instanceMatrix.needsUpdate = true;
+  scene.add(poleMesh); scene.add(headMesh);
+})();
+
+(function addWaterTowers() {
+  const chosen = [];
+  for (const b of buildings) {
+    if (b.maxY < 40 || b.maxY > 220) continue;
+    if (b.w < 10 || b.d < 10) continue;
+    if (rng() < 0.08) chosen.push(b);
+  }
+  if (!chosen.length) return;
+  const tankMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(1.15, 1.30, 2.4, 10),
+    new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.85, metalness: 0.10 }), chosen.length);
+  const roofMesh = new THREE.InstancedMesh(new THREE.ConeGeometry(1.35, 0.75, 10),
+    new THREE.MeshStandardMaterial({ color: 0x251a12, roughness: 0.9, metalness: 0.05 }), chosen.length);
+  const legMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.10, 1.2, 0.10),
+    new THREE.MeshStandardMaterial({ color: 0x1a1a1f, roughness: 0.7, metalness: 0.4 }), chosen.length * 4);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1);
+  let legIdx = 0;
+  for (let i = 0; i < chosen.length; i++) {
+    const b = chosen[i];
+    const x = b.cx + rand(-b.w * 0.22, b.w * 0.22), z = b.cz + rand(-b.d * 0.22, b.d * 0.22);
+    const baseY = b.maxY + 0.30;
+    m.compose(new THREE.Vector3(x, baseY + 1.8, z), q, s); tankMesh.setMatrixAt(i, m);
+    m.compose(new THREE.Vector3(x, baseY + 3.35, z), q, s); roofMesh.setMatrixAt(i, m);
+    for (const lo of [{ x: -0.7, z: -0.7 }, { x: 0.7, z: -0.7 }, { x: -0.7, z: 0.7 }, { x: 0.7, z: 0.7 }]) {
+      m.compose(new THREE.Vector3(x + lo.x, baseY + 0.6, z + lo.z), q, s);
+      legMesh.setMatrixAt(legIdx++, m);
+    }
+  }
+  tankMesh.instanceMatrix.needsUpdate = true; roofMesh.instanceMatrix.needsUpdate = true; legMesh.instanceMatrix.needsUpdate = true;
+  scene.add(tankMesh); scene.add(roofMesh); scene.add(legMesh);
+})();
+
+(function addACUnits() {
+  const units = [];
+  for (const b of buildings) {
+    if (b.maxY < 30 || b.maxY > 250) continue;
+    if (rng() > 0.42) continue;
+    const count = 1 + Math.floor(rng() * 3);
+    for (let i = 0; i < count; i++) {
+      units.push({ x: b.cx + rand(-b.w * 0.28, b.w * 0.28), z: b.cz + rand(-b.d * 0.28, b.d * 0.28),
+                   y: b.maxY + 0.30 + 0.35, rot: rng() * Math.PI * 2 });
+    }
+  }
+  if (!units.length) return;
+  const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1.4, 0.7, 1.1),
+    new THREE.MeshStandardMaterial({ color: 0x4a4e58, roughness: 0.75, metalness: 0.30 }), units.length);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1);
+  for (let i = 0; i < units.length; i++) {
+    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), units[i].rot);
+    m.compose(new THREE.Vector3(units[i].x, units[i].y, units[i].z), q, s);
+    mesh.setMatrixAt(i, m);
+  }
+  mesh.instanceMatrix.needsUpdate = true;
+  scene.add(mesh);
+})();
+
+(function addNeonSigns() {
+  const palette = [0xff2050, 0x2080ff, 0x20ff80, 0xffa020, 0xff20ff, 0x20ffff];
+  const groups = palette.map(() => []);
+  for (const b of buildings) {
+    if (b.maxY < 35) continue;
+    if (rng() > 0.20) continue;
+    const count = 1 + Math.floor(rng() * 2);
+    for (let i = 0; i < count; i++) {
+      const face = Math.floor(rng() * 4);
+      const y = rand(6, Math.min(b.maxY - 3, 42));
+      const w = rand(2.4, 5.0), h = rand(1.6, 4.0);
+      let x, z, rot;
+      if (face === 0)      { x = b.minX - 0.05; z = b.cz + rand(-b.d * 0.3, b.d * 0.3); rot = -Math.PI / 2; }
+      else if (face === 1) { x = b.maxX + 0.05; z = b.cz + rand(-b.d * 0.3, b.d * 0.3); rot =  Math.PI / 2; }
+      else if (face === 2) { x = b.cx + rand(-b.w * 0.3, b.w * 0.3); z = b.minZ - 0.05; rot = Math.PI; }
+      else                 { x = b.cx + rand(-b.w * 0.3, b.w * 0.3); z = b.maxZ + 0.05; rot = 0; }
+      groups[Math.floor(rng() * palette.length)].push({ x, y, z, w, h, rot });
+    }
+  }
+  const geo = new THREE.PlaneGeometry(1, 1);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+  for (let gi = 0; gi < groups.length; gi++) {
+    const list = groups[gi];
+    if (!list.length) continue;
+    const mat = new THREE.MeshBasicMaterial({ color: palette[gi], transparent: true, opacity: 0.92, side: THREE.DoubleSide, depthWrite: false });
+    const mesh = new THREE.InstancedMesh(geo, mat, list.length);
+    for (let i = 0; i < list.length; i++) {
+      const sg = list[i];
+      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), sg.rot);
+      s.set(sg.w, sg.h, 1);
+      m.compose(new THREE.Vector3(sg.x, sg.y, sg.z), q, s);
+      mesh.setMatrixAt(i, m);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    scene.add(mesh);
+  }
+})();
+
+class TrafficSystem {
+  constructor() {
+    this.cars = [];
+    const { blocksX, blocksZ, strideX, strideZ, originX, originZ, totalX, totalZ } = cityParams;
+    this.streetsX = [];
+    for (let bz = 0; bz < blocksZ - 1; bz++) this.streetsX.push(originZ + bz * strideZ + strideZ / 2);
+    this.streetsZ = [];
+    for (let bx = 0; bx < blocksX - 1; bx++) this.streetsZ.push(originX + bx * strideX + strideX / 2);
+    const N = CONFIG.systems.carCount;
+    this.bodyMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1.8, 0.55, 3.6),
+      new THREE.MeshStandardMaterial({ roughness: 0.4, metalness: 0.55 }), N);
+    this.cabinMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1.6, 0.5, 1.9),
+      new THREE.MeshStandardMaterial({ color: 0x0a0d14, roughness: 0.25, metalness: 0.6 }), N);
+    this.headlightMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.12, 6, 4),
+      new THREE.MeshBasicMaterial({ color: 0xffddaa }), N);
+    for (const m of [this.bodyMesh, this.cabinMesh, this.headlightMesh]) m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    const palette = [0xd03030, 0x3060d0, 0xf0f0f0, 0x101010, 0x606060, 0xd0a020, 0x208040, 0x8030a0];
+    const col = new THREE.Color();
+    for (let i = 0; i < N; i++) {
+      const onXStreet = rng() < 0.5;
+      const fixedCoord = onXStreet ? this.streetsX[Math.floor(rng() * this.streetsX.length)]
+                                    : this.streetsZ[Math.floor(rng() * this.streetsZ.length)];
+      const dir = rng() < 0.5 ? 1 : -1;
+      const laneOffset = dir > 0 ? 3.2 : -3.2;
+      const moving = onXStreet ? rand(-totalX / 2, totalX / 2) : rand(-totalZ / 2, totalZ / 2);
+      this.cars.push({ axis: onXStreet ? 'x' : 'z', moving, dir, speed: rand(CONFIG.systems.trafficSpeedMin, CONFIG.systems.trafficSpeedMax), laneOffset: fixedCoord + laneOffset });
+      col.setHex(palette[Math.floor(rng() * palette.length)]);
+      this.bodyMesh.setColorAt(i, col);
+    }
+    if (this.bodyMesh.instanceColor) this.bodyMesh.instanceColor.needsUpdate = true;
+    scene.add(this.bodyMesh); scene.add(this.cabinMesh); scene.add(this.headlightMesh);
+  }
+  update(dt) {
+    const { totalX, totalZ } = cityParams;
+    const dummy = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), scale = new THREE.Vector3(1, 1, 1);
+    const axisY = new THREE.Vector3(0, 1, 0);
+    for (let i = 0; i < this.cars.length; i++) {
+      const c = this.cars[i];
+      c.moving += c.dir * c.speed * dt;
+      const bound = c.axis === 'x' ? totalX / 2 + 20 : totalZ / 2 + 20;
+      if (c.moving >  bound) c.moving = -bound;
+      if (c.moving < -bound) c.moving =  bound;
+      let rotY = 0;
+      if (c.axis === 'x') rotY = c.dir > 0 ? 0 : Math.PI;
+      else                rotY = c.dir > 0 ? -Math.PI / 2 : Math.PI / 2;
+      q.setFromAxisAngle(axisY, rotY);
+      let x, z;
+      if (c.axis === 'x') { x = c.moving; z = c.laneOffset; }
+      else                { x = c.laneOffset; z = c.moving; }
+      pos.set(x, 0.45, z); dummy.compose(pos, q, scale); this.bodyMesh.setMatrixAt(i, dummy);
+      const cab = new THREE.Vector3(0, 0.55, 0).applyQuaternion(q);
+      pos.set(x + cab.x, 0.45 + cab.y, z + cab.z); dummy.compose(pos, q, scale); this.cabinMesh.setMatrixAt(i, dummy);
+      const fwd = new THREE.Vector3(0, 0, c.axis === 'x' ? (c.dir > 0 ? 1.85 : -1.85) : 0);
+      if (c.axis === 'z') fwd.set(0, 0, c.dir > 0 ? 1.85 : -1.85);
+      const fwdW = fwd.clone().applyQuaternion(q);
+      pos.set(x + fwdW.x, 0.5, z + fwdW.z); dummy.compose(pos, q, scale); this.headlightMesh.setMatrixAt(i, dummy);
+    }
+    this.bodyMesh.instanceMatrix.needsUpdate = true;
+    this.cabinMesh.instanceMatrix.needsUpdate = true;
+    this.headlightMesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
+class PedestrianSystem {
+  constructor() {
+    this.peds = [];
+    const { blocksX, blocksZ, blockW, blockD, strideX, strideZ, originX, originZ } = cityParams;
+    const N = CONFIG.systems.pedestrianCount;
+    this.bodyMesh = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.22, 0.55, 4, 8),
+      new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0.05 }), N);
+    this.headMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.12, 8, 6),
+      new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0.0 }), N);
+    for (const m of [this.bodyMesh, this.headMesh]) m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    const palette = [0x603020, 0x204060, 0x802020, 0x306030, 0x808080, 0xd0c0a0, 0x402040, 0x203040];
+    const col = new THREE.Color();
+    for (let i = 0; i < N; i++) {
+      const bx = Math.floor(rng() * blocksX), bz = Math.floor(rng() * blocksZ);
+      const cx = originX + bx * strideX, cz = originZ + bz * strideZ;
+      const edge = Math.floor(rng() * 4);
+      const hw = blockW / 2 + 1.2, hd = blockD / 2 + 1.2;
+      let x, z, axis, dir;
+      if (edge === 0)      { x = cx + rand(-hw, hw); z = cz - hd; axis = 'x'; dir = rng() < 0.5 ? 1 : -1; }
+      else if (edge === 1) { x = cx + rand(-hw, hw); z = cz + hd; axis = 'x'; dir = rng() < 0.5 ? 1 : -1; }
+      else if (edge === 2) { x = cx - hw; z = cz + rand(-hd, hd); axis = 'z'; dir = rng() < 0.5 ? 1 : -1; }
+      else                 { x = cx + hw; z = cz + rand(-hd, hd); axis = 'z'; dir = rng() < 0.5 ? 1 : -1; }
+      this.peds.push({ x, z, axis, dir, bounds: axis === 'x' ? hw : hd, center: axis === 'x' ? cx : cz,
+                       speed: rand(CONFIG.systems.pedSpeedMin, CONFIG.systems.pedSpeedMax), walkPhase: rng() * Math.PI * 2 });
+      col.setHex(palette[Math.floor(rng() * palette.length)]);
+      this.bodyMesh.setColorAt(i, col);
+      this.headMesh.setColorAt(i, col.clone().multiplyScalar(0.85));
+    }
+    if (this.bodyMesh.instanceColor) this.bodyMesh.instanceColor.needsUpdate = true;
+    if (this.headMesh.instanceColor) this.headMesh.instanceColor.needsUpdate = true;
+    scene.add(this.bodyMesh); scene.add(this.headMesh);
+  }
+  update(dt, t) {
+    const dummy = new THREE.Matrix4(), q = new THREE.Quaternion(), pos = new THREE.Vector3(), scale = new THREE.Vector3(1, 1, 1);
+    const axisY = new THREE.Vector3(0, 1, 0);
+    for (let i = 0; i < this.peds.length; i++) {
+      const p = this.peds[i];
+      if (p.axis === 'x') {
+        p.x += p.dir * p.speed * dt;
+        if (p.x > p.center + p.bounds) p.x = p.center - p.bounds;
+        if (p.x < p.center - p.bounds) p.x = p.center + p.bounds;
+      } else {
+        p.z += p.dir * p.speed * dt;
+        if (p.z > p.center + p.bounds) p.z = p.center - p.bounds;
+        if (p.z < p.center - p.bounds) p.z = p.center + p.bounds;
+      }
+      const walkBob = Math.abs(Math.sin(t * 5 * p.speed + p.walkPhase)) * 0.04;
+      const bodyY = 0.75 + walkBob;
+      let rotY = 0;
+      if (p.axis === 'x') rotY = p.dir > 0 ? -Math.PI / 2 : Math.PI / 2;
+      else                rotY = p.dir > 0 ? 0 : Math.PI;
+      q.setFromAxisAngle(axisY, rotY);
+      pos.set(p.x, bodyY, p.z); dummy.compose(pos, q, scale); this.bodyMesh.setMatrixAt(i, dummy);
+      pos.set(p.x, bodyY + 0.55 + Math.sin(t * 5 * p.speed + p.walkPhase) * 0.03, p.z);
+      dummy.compose(pos, q, scale); this.headMesh.setMatrixAt(i, dummy);
+    }
+    this.bodyMesh.instanceMatrix.needsUpdate = true;
+    this.headMesh.instanceMatrix.needsUpdate = true;
+  }
+}
+
+class SuitDamageSystem {
+  constructor(materials) {
+    this.materials = materials;
+    this.regions = { head: 0, torso: 0, arms: 0, legs: 0 };
+    this.max = 1.0;
+    this.baseRed = new THREE.Color(0x8f1420); this.dmgRed = new THREE.Color(0x2a0808);
+    this.baseBlue = new THREE.Color(0x0a1236); this.dmgBlue = new THREE.Color(0x0a0406);
+    this.tmpColor = new THREE.Color();
+  }
+  applyDamage(region, amount) { if (region in this.regions) this.regions[region] = clamp(this.regions[region] + amount, 0, this.max); }
+  getTotal() { return (this.regions.head + this.regions.torso + this.regions.arms + this.regions.legs) / 4; }
+  update() {
+    const total = this.getTotal();
+    this.tmpColor.copy(this.baseRed).lerp(this.dmgRed, total * 0.75);
+    this.materials.red.color.copy(this.tmpColor);
+    this.materials.redPlain.color.copy(this.tmpColor);
+    const legFactor = Math.max(this.regions.legs, this.regions.torso * 0.5);
+    this.tmpColor.copy(this.baseBlue).lerp(this.dmgBlue, legFactor * 0.7);
+    this.materials.blue.color.copy(this.tmpColor);
+    const hd = this.regions.head;
+    this.materials.lens.emissiveIntensity = lerp(0.55, 0.05, hd);
+    this.materials.lens.color.setRGB(lerp(1.0, 0.55, hd), lerp(1.0, 0.55, hd), lerp(1.0, 0.55, hd));
+  }
+  heal(amount) { for (const k in this.regions) this.regions[k] = clamp(this.regions[k] - amount, 0, this.max); }
+}
+
+function makeSuitWebTexture() {
+  const size = 1024;
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#8f1420'; ctx.fillRect(0, 0, size, size);
+  const g = ctx.createRadialGradient(size * 0.5, size * 0.35, 40, size * 0.5, size * 0.5, size * 0.8);
+  g.addColorStop(0, 'rgba(220,60,70,0.18)'); g.addColorStop(0.7, 'rgba(30,0,0,0.15)'); g.addColorStop(1, 'rgba(0,0,0,0.45)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 22000; i++) {
+    ctx.fillStyle = Math.random() < 0.5 ? 'rgba(0,0,0,0.06)' : 'rgba(255,120,120,0.04)';
+    ctx.fillRect(Math.random() * size, Math.random() * size, 1, 1);
+  }
+  ctx.strokeStyle = 'rgba(5,2,3,0.9)'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+  const cx = size * 0.5, cy = size * 0.5, spokes = 36, rings = 26, maxR = size * 0.95;
+  for (let i = 0; i < spokes; i++) {
+    const a = (i / spokes) * Math.PI * 2;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * maxR, cy + Math.sin(a) * maxR); ctx.stroke();
+  }
+  for (let r = 1; r <= rings; r++) {
+    const rad = (r / rings) * maxR;
+    ctx.beginPath();
+    for (let i = 0; i <= spokes * 2; i++) {
+      const a = (i / (spokes * 2)) * Math.PI * 2;
+      const x = cx + Math.cos(a) * rad, y = cy + Math.sin(a) * rad;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(1.9, 1.9); tex.anisotropy = 8;
+  return tex;
+}
+
+function makeWebNormalMap() {
+  const size = 1024;
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#8080ff'; ctx.fillRect(0, 0, size, size);
+  ctx.strokeStyle = 'rgba(200,200,255,1)'; ctx.lineWidth = 3.2; ctx.lineCap = 'round';
+  const cx = size * 0.5, cy = size * 0.5, spokes = 36, rings = 26, maxR = size * 0.95;
+  for (let i = 0; i < spokes; i++) {
+    const a = (i / spokes) * Math.PI * 2;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * maxR, cy + Math.sin(a) * maxR); ctx.stroke();
+  }
+  for (let r = 1; r <= rings; r++) {
+    const rad = (r / rings) * maxR;
+    ctx.beginPath();
+    for (let i = 0; i <= spokes * 2; i++) {
+      const a = (i / (spokes * 2)) * Math.PI * 2;
+      const x = cx + Math.cos(a) * rad, y = cy + Math.sin(a) * rad;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.closePath(); ctx.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(1.9, 1.9);
+  return tex;
+}
+
+function makeBackSpiderEmblem() {
+  const size = 1024;
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const ctx = c.getContext('2d'); ctx.clearRect(0, 0, size, size);
+  const cx = size * 0.5, cy = size * 0.52, bodyW = size * 0.055, bodyH = size * 0.14;
+  ctx.fillStyle = '#f4f6fb';
+  ctx.beginPath(); ctx.ellipse(cx, cy - bodyH * 0.35, bodyW * 0.85, bodyH * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx, cy + bodyH * 0.35, bodyW * 1.15, bodyH * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#f4f6fb'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const legPairs = [
+    { startY: -0.30, a1: -1.35, l1: 0.42, a2: -1.55, l2: 0.55, w: 0.055 },
+    { startY: -0.05, a1: -0.85, l1: 0.38, a2: -0.65, l2: 0.55, w: 0.052 },
+    { startY:  0.22, a1:  0.55, l1: 0.40, a2:  0.75, l2: 0.52, w: 0.048 },
+    { startY:  0.55, a1:  1.10, l1: 0.38, a2:  1.32, l2: 0.48, w: 0.045 },
+  ];
+  for (let side = -1; side <= 1; side += 2) for (const L of legPairs) {
+    const sx = cx + side * bodyW * 0.55, sy = cy + L.startY * bodyH * 1.05;
+    const a1 = side > 0 ? L.a1 : Math.PI - L.a1;
+    const x1 = sx + Math.cos(a1) * L.l1 * size * 0.5, y1 = sy + Math.sin(a1) * L.l1 * size * 0.5;
+    const a2 = side > 0 ? L.a2 : Math.PI - L.a2;
+    const x2 = x1 + Math.cos(a2) * L.l2 * size * 0.5, y2 = y1 + Math.sin(a2) * L.l2 * size * 0.5;
+    ctx.lineWidth = L.w * size * 0.35;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x2, y2, ctx.lineWidth * 0.5, 0, Math.PI * 2); ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  return tex;
+}
+
+function makeChestSpiderEmblem() {
+  const size = 512;
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const ctx = c.getContext('2d'); ctx.clearRect(0, 0, size, size);
+  const cx = size * 0.5, cy = size * 0.5, bodyW = size * 0.055, bodyH = size * 0.11;
+  ctx.fillStyle = '#f4f6fb';
+  ctx.beginPath(); ctx.ellipse(cx, cy - bodyH * 0.3, bodyW * 0.8, bodyH * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx, cy + bodyH * 0.35, bodyW * 1.05, bodyH * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#f4f6fb'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const legPairs = [
+    { startY: -0.25, a1: -1.15, l1: 0.35, a2: -1.40, l2: 0.42, w: 0.05 },
+    { startY: -0.02, a1: -0.75, l1: 0.32, a2: -0.55, l2: 0.42, w: 0.047 },
+    { startY:  0.22, a1:  0.55, l1: 0.34, a2:  0.70, l2: 0.40, w: 0.044 },
+    { startY:  0.50, a1:  1.00, l1: 0.32, a2:  1.22, l2: 0.36, w: 0.041 },
+  ];
+  for (let side = -1; side <= 1; side += 2) for (const L of legPairs) {
+    const sx = cx + side * bodyW * 0.55, sy = cy + L.startY * bodyH * 1.05;
+    const a1 = side > 0 ? L.a1 : Math.PI - L.a1;
+    const x1 = sx + Math.cos(a1) * L.l1 * size * 0.5, y1 = sy + Math.sin(a1) * L.l1 * size * 0.5;
+    const a2 = side > 0 ? L.a2 : Math.PI - L.a2;
+    const x2 = x1 + Math.cos(a2) * L.l2 * size * 0.5, y2 = y1 + Math.sin(a2) * L.l2 * size * 0.5;
+    ctx.lineWidth = L.w * size * 0.3;
+    ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x2, y2, ctx.lineWidth * 0.5, 0, Math.PI * 2); ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  return tex;
+}
+
+const suitWebMap = makeSuitWebTexture();
+const suitWebNormal = makeWebNormalMap();
+const backSpiderTex = makeBackSpiderEmblem();
+const chestSpiderTex = makeChestSpiderEmblem();
+
+const SM = {
+  red: new THREE.MeshStandardMaterial({ map: suitWebMap, normalMap: suitWebNormal, normalScale: new THREE.Vector2(0.85, 0.85), roughness: 0.42, metalness: 0.10, envMapIntensity: 0.9 }),
+  redPlain: new THREE.MeshStandardMaterial({ color: 0x8f1420, roughness: 0.48, metalness: 0.08 }),
+  blue: new THREE.MeshStandardMaterial({ color: 0x0a1236, roughness: 0.58, metalness: 0.14, envMapIntensity: 0.85 }),
+  lens: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.06, metalness: 0.15, emissive: 0xdfe8ff, emissiveIntensity: 0.55 }),
+  lensRim: new THREE.MeshStandardMaterial({ color: 0x08080c, roughness: 0.4, metalness: 0.25 }),
+  chestEmblem: new THREE.MeshBasicMaterial({ map: chestSpiderTex, transparent: true, depthWrite: false, opacity: 0.95 }),
+  backEmblem:  new THREE.MeshBasicMaterial({ map: backSpiderTex, transparent: true, depthWrite: false, opacity: 0.95 }),
+};
+
+function buildPlayer() {
+  const g = new THREE.Group();
+
+  const chest = new THREE.Mesh(new THREE.CapsuleGeometry(0.235, 0.28, 8, 18), SM.red);
+  chest.position.y = 1.32; chest.scale.set(1.32, 1.0, 0.72); g.add(chest);
+
+  const abs = new THREE.Mesh(new THREE.CapsuleGeometry(0.195, 0.24, 8, 16), SM.red);
+  abs.position.y = 1.02; abs.scale.set(1.18, 1.0, 0.72); g.add(abs);
+
+  const hips = new THREE.Mesh(new THREE.CapsuleGeometry(0.185, 0.14, 6, 14), SM.blue);
+  hips.position.y = 0.82; hips.scale.set(1.20, 1.0, 0.78); g.add(hips);
+
+  const deltGeo = new THREE.SphereGeometry(0.135, 14, 12);
+  const lDelt = new THREE.Mesh(deltGeo, SM.red);
+  lDelt.position.set(-0.36, 1.42, 0); lDelt.scale.set(1.15, 0.92, 1.05); g.add(lDelt);
+  const rDelt = new THREE.Mesh(deltGeo, SM.red);
+  rDelt.position.set(0.36, 1.42, 0); rDelt.scale.set(1.15, 0.92, 1.05); g.add(rDelt);
+
+  const chestEmblem = new THREE.Mesh(new THREE.PlaneGeometry(0.28, 0.30), SM.chestEmblem);
+  chestEmblem.position.set(0, 1.36, 0.20); chestEmblem.renderOrder = 2; g.add(chestEmblem);
+
+  const backEmblem = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.82), SM.backEmblem);
+  backEmblem.position.set(0, 1.24, -0.185); backEmblem.rotation.y = Math.PI; backEmblem.renderOrder = 2; g.add(backEmblem);
+
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.088, 0.13, 14), SM.redPlain);
+  neck.position.y = 1.60; g.add(neck);
+
+  const headGroup = new THREE.Group();
+  headGroup.position.y = 1.78;
+  const headGeo = new THREE.SphereGeometry(0.155, 32, 24);
+  const hp = headGeo.attributes.position; const v = new THREE.Vector3();
+  for (let i = 0; i < hp.count; i++) {
+    v.fromBufferAttribute(hp, i);
+    const t = clamp((-v.y + 0.155) / 0.31, 0, 1);
+    const taper = lerp(0.72, 1.0, t);
+    v.x *= taper; v.z *= taper;
+    if (v.z < 0) v.z *= 0.94;
+    hp.setXYZ(i, v.x, v.y * 1.12, v.z * 1.04);
+  }
+  headGeo.computeVertexNormals();
+  headGroup.add(new THREE.Mesh(headGeo, SM.red));
+
+  function makeEye(side) {
+    const eyeGroup = new THREE.Group();
+    const s = new THREE.Shape();
+    s.moveTo(0, 0);
+    s.bezierCurveTo(0.018, 0.045, 0.055, 0.055, 0.075, 0.038);
+    s.lineTo(0.098, 0.010); s.lineTo(0.098, -0.010);
+    s.bezierCurveTo(0.055, -0.055, 0.018, -0.045, 0, 0);
+    const geo = new THREE.ExtrudeGeometry(s, { depth: 0.006, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.004, bevelSegments: 3, curveSegments: 12 });
+    const rimGeo = geo.clone(); rimGeo.scale(1.10, 1.10, 1.0);
+    const rim = new THREE.Mesh(rimGeo, SM.lensRim); rim.position.z = -0.003; eyeGroup.add(rim);
+    eyeGroup.add(new THREE.Mesh(geo, SM.lens));
+    eyeGroup.scale.set(1.15, 1.05, 1.0);
+    eyeGroup.position.set(side * 0.028, 0.018, 0.148);
+    eyeGroup.rotation.z = -side * 0.32; eyeGroup.rotation.y = side * 0.42; eyeGroup.rotation.x = -0.06;
+    if (side < 0) { eyeGroup.scale.x = -1.15; eyeGroup.rotation.z = -side * 0.32; eyeGroup.rotation.y = side * 0.42; }
+    return eyeGroup;
+  }
+  headGroup.add(makeEye(-1)); headGroup.add(makeEye(1));
+  g.add(headGroup);
+
+  const upperArmGeo = new THREE.CapsuleGeometry(0.072, 0.30, 6, 14);
+  const foreArmGeo  = new THREE.CapsuleGeometry(0.062, 0.28, 6, 14);
+  const thighGeo    = new THREE.CapsuleGeometry(0.098, 0.40, 6, 14);
+  const calfGeo     = new THREE.CapsuleGeometry(0.078, 0.36, 6, 14);
+  const handGeo     = new THREE.SphereGeometry(0.058, 12, 10);
+  const bootGeo     = new THREE.BoxGeometry(0.135, 0.09, 0.27);
+
+  function makeArm(side) {
+    const pivot = new THREE.Group();
+    pivot.position.set(side * 0.36, 1.42, 0);
+    const upper = new THREE.Mesh(upperArmGeo, SM.red); upper.position.y = -0.18; pivot.add(upper);
+    const elbow = new THREE.Group(); elbow.position.y = -0.36;
+    const fore = new THREE.Mesh(foreArmGeo, SM.red); fore.position.y = -0.18; elbow.add(fore);
+    const hand = new THREE.Mesh(handGeo, SM.red); hand.position.y = -0.37; elbow.add(hand);
+    pivot.add(elbow); g.add(pivot);
+    return { pivot, elbow, hand };
+  }
+
+  function makeLeg(side) {
+    const pivot = new THREE.Group();
+    pivot.position.set(side * 0.13, 0.78, 0);
+    const thigh = new THREE.Mesh(thighGeo, SM.blue); thigh.position.y = -0.24; pivot.add(thigh);
+    const knee = new THREE.Group(); knee.position.y = -0.48;
+    const calf = new THREE.Mesh(calfGeo, SM.blue); calf.position.y = -0.22; knee.add(calf);
+    const footPivot = new THREE.Group();
+    footPivot.position.y = -0.42;
+    const boot = new THREE.Mesh(bootGeo, SM.red);
+    boot.position.set(0, -0.03, 0.06);
+    footPivot.add(boot);
+    knee.add(footPivot);
+    pivot.add(knee); g.add(pivot);
+    return { pivot, knee, foot: footPivot };
+  }
+
+  const lArm = makeArm(-1), rArm = makeArm(1);
+  const lLeg = makeLeg(-1), rLeg = makeLeg(1);
+
+  const pizzaGroup = new THREE.Group();
+  const crust = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.012, 3, 1),
+    new THREE.MeshStandardMaterial({ color: 0xd8a060, roughness: 0.82 }));
+  crust.rotation.y = Math.PI; crust.rotation.x = Math.PI / 2;
+  pizzaGroup.add(crust);
+  for (let i = 0; i < 3; i++) {
+    const pep = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.004, 8),
+      new THREE.MeshStandardMaterial({ color: 0xa02020, roughness: 0.7 }));
+    const ang = (i / 3) * Math.PI * 2;
+    pep.position.set(Math.cos(ang) * 0.03, 0.008, Math.sin(ang) * 0.03);
+    pep.rotation.x = Math.PI / 2;
+    pizzaGroup.add(pep);
+  }
+  pizzaGroup.position.set(0, -0.42, 0.05);
+  pizzaGroup.rotation.x = -1.15;
+  pizzaGroup.visible = false;
+  rArm.elbow.add(pizzaGroup);
+
+  const boxGroup = new THREE.Group();
+  const boxMat = new THREE.MeshStandardMaterial({ color: 0xc9a074, roughness: 0.85 });
+  const boxTop = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.02, 0.42), boxMat);
+  boxTop.position.y = 0.09; boxTop.rotation.x = -0.55; boxGroup.add(boxTop);
+  const boxBase = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.42), boxMat);
+  boxBase.position.y = 0.03; boxGroup.add(boxBase);
+  boxGroup.visible = false;
+  scene.add(boxGroup);
+
+  g.userData.rig = { torso: chest, headGroup, lArm, rArm, lLeg, rLeg, pizzaGroup, boxGroup };
+  return g;
+}
+
+const player = buildPlayer();
+scene.add(player);
+
+const heroRim1 = new THREE.PointLight(0xa8c8ff, 1.6, 8, 2.0);
+const heroRim2 = new THREE.PointLight(0xff8860, 0.9, 6, 2.0);
+scene.add(heroRim1); scene.add(heroRim2);
+
+const webGeo = new THREE.CylinderGeometry(0.022, 0.022, 1, 6, 1, true);
+webGeo.translate(0, 0.5, 0);
+const webMesh = new THREE.Mesh(webGeo, new THREE.MeshBasicMaterial({ color: 0xf0f2ff }));
+webMesh.frustumCulled = false;
+webMesh.visible = false;
+scene.add(webMesh);
+
+const combatWebMesh = new THREE.Mesh(webGeo, new THREE.MeshBasicMaterial({ color: 0xf6f6ff }));
+combatWebMesh.frustumCulled = false;
+combatWebMesh.visible = false;
+scene.add(combatWebMesh);
+
+const _up = new THREE.Vector3(0, 1, 0);
+function setWebLine(mesh, start, end) {
+  const dir = new THREE.Vector3().subVectors(end, start);
+  const len = dir.length();
+  if (len < 0.01) { mesh.visible = false; return; }
+  mesh.visible = true;
+  mesh.position.copy(start);
+  mesh.scale.set(1, len, 1);
+  mesh.quaternion.setFromUnitVectors(_up, dir.normalize());
+}
+function updateWebLine(start, end) { setWebLine(webMesh, start, end); }
+
+const State = { GROUNDED: 'G', AIRBORNE: 'A', SWINGING: 'S', WALL_CRAWL: 'W', LANDING: 'L' };
+
+const ps = {
+  state: State.AIRBORNE,
+  vel: new THREE.Vector3(),
+  anchor: new THREE.Vector3(),
+  ropeLength: 0,
+  swingDir: new THREE.Vector3(),
+  time: 0, airTime: 0, swingTime: 0, swingCooldown: 0,
+  handSide: 1,
+  wallNormal: new THREE.Vector3(),
+  wallPoint: new THREE.Vector3(),
+  wallStickTimer: 0,
+  landTimer: 0, landIntensity: 0,
+  runPhase: 0,
+};
+
+const App = { mode: 'MENU', sitBlend: 1, transitionT: 0, controlsEnabled: false, heroRoofY: 100 };
+
+const traffic = new TrafficSystem();
+const pedestrians = new PedestrianSystem();
+const suitDamage = new SuitDamageSystem(SM);
+
+const _ray = new THREE.Raycaster();
+_ray.far = CONFIG.swing.maxRope;
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
+const _wallRays = [
+  new THREE.Vector3( 1, 0, 0), new THREE.Vector3(-1, 0, 0),
+  new THREE.Vector3( 0, 0, 1), new THREE.Vector3( 0, 0,-1),
+  new THREE.Vector3( 0.7, 0, 0.7).normalize(), new THREE.Vector3(-0.7, 0, 0.7).normalize(),
+  new THREE.Vector3( 0.7, 0,-0.7).normalize(), new THREE.Vector3(-0.7, 0,-0.7).normalize(),
+];
+
+const THUG_HOODIE = [
+  new THREE.MeshStandardMaterial({ color: 0x1f2128, roughness: 0.88, metalness: 0.04 }),
+  new THREE.MeshStandardMaterial({ color: 0x2a1e1e, roughness: 0.86, metalness: 0.05 }),
+  new THREE.MeshStandardMaterial({ color: 0x1e222e, roughness: 0.86, metalness: 0.05 }),
+  new THREE.MeshStandardMaterial({ color: 0x24281c, roughness: 0.88, metalness: 0.04 }),
+];
+const THUG_PANTS = new THREE.MeshStandardMaterial({ color: 0x11131a, roughness: 0.9, metalness: 0.03 });
+const THUG_SKIN  = new THREE.MeshStandardMaterial({ color: 0xbb8a6c, roughness: 0.78, metalness: 0.02 });
+const THUG_MASK  = new THREE.MeshStandardMaterial({ color: 0x0b0b10, roughness: 0.62, metalness: 0.04 });
+const THUG_ACCENT = [0xd83030, 0x30a0d8, 0x30d060, 0xd0a030, 0xa030d0];
+
+class Enemy {
+  constructor(x, z, y) {
+    this.group = new THREE.Group();
+    this.group.position.set(x, y, z);
+
+    const hoodieMat = THUG_HOODIE[Math.floor(Math.random() * THUG_HOODIE.length)];
+    const accentColor = THUG_ACCENT[Math.floor(Math.random() * THUG_ACCENT.length)];
+    const accentMat = new THREE.MeshStandardMaterial({ color: accentColor, roughness: 0.7 });
+
+    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.25, 0.42, 6, 14), hoodieMat);
+    torso.position.y = 1.05;
+    torso.scale.set(1.16, 1.0, 0.76);
+    this.group.add(torso);
+
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.03), accentMat);
+    stripe.position.set(0, 1.05, 0.19);
+    this.group.add(stripe);
+
+    const hips = new THREE.Mesh(new THREE.CapsuleGeometry(0.19, 0.12, 6, 12), THUG_PANTS);
+    hips.position.y = 0.72;
+    this.group.add(hips);
+
+    const hood = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), hoodieMat);
+    hood.position.set(0, 1.62, -0.05);
+    hood.scale.set(1.1, 0.95, 1.0);
+    this.group.add(hood);
+
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.135, 20, 14), THUG_MASK);
+    head.position.y = 1.58;
+    head.scale.set(1.0, 1.1, 1.02);
+    this.group.add(head);
+
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff3322 });
+    for (const s of [-1, 1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 5), eyeMat);
+      eye.position.set(s * 0.05, 1.60, 0.12);
+      this.group.add(eye);
+    }
+
+    const armGeo = new THREE.CapsuleGeometry(0.062, 0.28, 4, 10);
+    const foreGeo = new THREE.CapsuleGeometry(0.055, 0.25, 4, 10);
+    const makeArm = (side) => {
+      const pivot = new THREE.Group();
+      pivot.position.set(side * 0.32, 1.24, 0);
+      const upper = new THREE.Mesh(armGeo, hoodieMat);
+      upper.position.y = -0.17;
+      pivot.add(upper);
+      const elbow = new THREE.Group();
+      elbow.position.y = -0.33;
+      const fore = new THREE.Mesh(foreGeo, hoodieMat);
+      fore.position.y = -0.16;
+      elbow.add(fore);
+      const hand = new THREE.Mesh(new THREE.SphereGeometry(0.052, 8, 6), THUG_SKIN);
+      hand.position.y = -0.34;
+      elbow.add(hand);
+      pivot.add(elbow);
+      this.group.add(pivot);
+      return { pivot, elbow, hand };
+    };
+    this.lArm = makeArm(-1); this.rArm = makeArm(1);
+
+    const thighGeo = new THREE.CapsuleGeometry(0.088, 0.34, 4, 10);
+    const calfGeo = new THREE.CapsuleGeometry(0.072, 0.32, 4, 10);
+    const makeLeg = (side) => {
+      const pivot = new THREE.Group();
+      pivot.position.set(side * 0.115, 0.72, 0);
+      const thigh = new THREE.Mesh(thighGeo, THUG_PANTS);
+      thigh.position.y = -0.22;
+      pivot.add(thigh);
+      const knee = new THREE.Group();
+      knee.position.y = -0.44;
+      const calf = new THREE.Mesh(calfGeo, THUG_PANTS);
+      calf.position.y = -0.20;
+      knee.add(calf);
+      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.08, 0.22),
+        new THREE.MeshStandardMaterial({ color: 0x0a0a12, roughness: 0.9 }));
+      shoe.position.set(0, -0.42, 0.04);
+      knee.add(shoe);
+      pivot.add(knee);
+      this.group.add(pivot);
+      return { pivot, knee };
+    };
+    this.lLeg = makeLeg(-1); this.rLeg = makeLeg(1);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 64; canvas.height = 8;
+    this.hpCanvas = canvas;
+    this.hpCtx = canvas.getContext('2d');
+    this.hpTex = new THREE.CanvasTexture(canvas);
+    const hpSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: this.hpTex, transparent: true, depthTest: false, depthWrite: false,
+    }));
+    hpSprite.scale.set(1.0, 0.13, 1);
+    hpSprite.position.y = 2.1;
+    hpSprite.renderOrder = 999;
+    this.hpSprite = hpSprite;
+    this.group.add(hpSprite);
+
+    this.health = CONFIG.combat.enemyHealth;
+    this.maxHealth = CONFIG.combat.enemyHealth;
+    this.state = 'idle';
+    this.hitTimer = 0;
+    this.attackTimer = 0;
+    this.swingTimer = 0;
+    this.swingHitDone = false;
+    this.attackCooldown = 0;
+    this.webTimer = 0;
+    this.hitFlash = 0;
+    this.vel = new THREE.Vector3();
+    this.facing = Math.random() * Math.PI * 2;
+    this.homeX = x; this.homeZ = z;
+    this.walkPhase = Math.random() * Math.PI * 2;
+    this.roamTarget = { x, z };
+    this.roamTimer = 0;
+    this.speed = 3.5 + Math.random() * 1.5;
+    this.downTimer = 0;
+
+    this.flashMats = [hoodieMat, THUG_PANTS, THUG_SKIN, THUG_MASK];
+    this.origColors = this.flashMats.map(m => m.color.clone());
+
+    this.updateHealthBar();
+    scene.add(this.group);
+  }
+
+  updateHealthBar() {
+    const ctx = this.hpCtx;
+    ctx.clearRect(0, 0, 64, 8);
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    ctx.fillRect(0, 0, 64, 8);
+    const w = Math.max(0, 62 * (this.health / this.maxHealth));
+    ctx.fillStyle = this.health > 50 ? '#3aff3a' : this.health > 25 ? '#ffaa40' : '#ff4040';
+    ctx.fillRect(1, 1, w, 6);
+    this.hpTex.needsUpdate = true;
+    this.hpSprite.visible = this.health < this.maxHealth && this.state !== 'down';
+  }
+
+  takeDamage(amount, fromDir, force) {
+    if (this.state === 'down') return;
+    this.health = Math.max(0, this.health - amount);
+    this.hitFlash = 0.18;
+    this.updateHealthBar();
+    this.state = 'hit';
+    this.hitTimer = 0.35;
+    if (fromDir) {
+      this.vel.x = fromDir.x * force;
+      this.vel.z = fromDir.z * force;
+    }
+    if (this.health <= 0) {
+      this.state = 'down';
+      this.hpSprite.visible = false;
+      this.downTimer = 0;
+    }
+  }
+
+  webUp() {
+    if (this.state === 'down') return;
+    this.state = 'webbed';
+    this.webTimer = CONFIG.combat.webImmobilizeTime;
+    this.vel.set(0, 0, 0);
+  }
+
+  update(dt, playerPos) {
+    if (this.hitFlash > 0) {
+      this.hitFlash -= dt;
+      const f = clamp(this.hitFlash / 0.18, 0, 1);
+      for (let i = 0; i < this.flashMats.length; i++) {
+        this.flashMats[i].color.copy(this.origColors[i]).lerp(new THREE.Color(0xff3030), f * 0.85);
+      }
+    } else if (this.flashMats[0].color.r > this.origColors[0].r + 0.001) {
+      for (let i = 0; i < this.flashMats.length; i++) {
+        this.flashMats[i].color.copy(this.origColors[i]);
+      }
+    }
+
+    if (this.state === 'down') {
+      this.downTimer += dt;
+      const fall = clamp(this.downTimer * 3.5, 0, 1);
+      this.group.rotation.x = fall * Math.PI / 2 * 0.9;
+      this.group.rotation.z = fall * 0.28;
+      this.group.position.y = damp(this.group.position.y, this.group.position.y - 0.05, 6, dt);
+      this.lArm.pivot.rotation.x = 0.3; this.lArm.pivot.rotation.z = 0.6;
+      this.rArm.pivot.rotation.x = -0.3; this.rArm.pivot.rotation.z = -0.6;
+      this.lLeg.pivot.rotation.x = 0.2;
+      this.rLeg.pivot.rotation.x = -0.2;
+      return;
+    }
+
+    if (this.state === 'webbed') {
+      this.webTimer -= dt;
+      const wiggle = Math.sin(performance.now() * 0.009) * 0.06;
+      this.group.rotation.z = wiggle;
+      this.lArm.pivot.rotation.x = -2.3 + wiggle * 0.4;
+      this.rArm.pivot.rotation.x = -2.3 - wiggle * 0.4;
+      this.lArm.pivot.rotation.z = 0.5;
+      this.rArm.pivot.rotation.z = -0.5;
+      this.lArm.elbow.rotation.x = -0.1;
+      this.rArm.elbow.rotation.x = -0.1;
+      this.lLeg.pivot.rotation.x = 0.5;
+      this.rLeg.pivot.rotation.x = 0.5;
+      this.lLeg.knee.rotation.x = 0.6;
+      this.rLeg.knee.rotation.x = 0.6;
+      if (this.webTimer <= 0) {
+        this.state = 'chase';
+        this.group.rotation.z = 0;
+      }
+      return;
+    }
+
+    if (this.state === 'hit') {
+      this.hitTimer -= dt;
+      this.vel.x *= 0.85;
+      this.vel.z *= 0.85;
+      this.group.position.x += this.vel.x * dt;
+      this.group.position.z += this.vel.z * dt;
+      const p = clamp(1 - this.hitTimer / 0.35, 0, 1);
+      const rec = Math.sin(p * Math.PI) * 0.4;
+      this.lArm.pivot.rotation.x = 0.2 - rec;
+      this.rArm.pivot.rotation.x = 0.2 - rec;
+      this.rArm.pivot.rotation.z = -0.5;
+      this.lArm.pivot.rotation.z = 0.5;
+      this.rArm.elbow.rotation.x = -0.7;
+      this.lArm.elbow.rotation.x = -0.7;
+      if (this.hitTimer <= 0) this.state = 'chase';
+      return;
+    }
+
+    const dx = playerPos.x - this.group.position.x;
+    const dz = playerPos.z - this.group.position.z;
+    const dist = Math.hypot(dx, dz);
+    const yDiff = Math.abs(playerPos.y - this.group.position.y);
+    const canEngage = dist < 22 && yDiff < 4;
+
+    if (this.state === 'attack') {
+      this.attackCooldown -= dt;
+      this.facing = Math.atan2(dx, dz);
+      this.group.rotation.y = damp(this.group.rotation.y, this.facing, 12, dt);
+
+      if (this.swingTimer > 0) {
+        this.swingTimer -= dt;
+        const p = 1 - this.swingTimer / 0.4;
+        const sw = Math.sin(p * Math.PI);
+        this.rArm.pivot.rotation.x = -1.4 * sw - 0.2;
+        this.rArm.pivot.rotation.z = -0.35;
+        this.rArm.elbow.rotation.x = -0.3 - 0.5 * sw;
+        this.lArm.pivot.rotation.x = 0.3;
+        this.lArm.pivot.rotation.z = 0.35;
+        this.lArm.elbow.rotation.x = -0.9;
+        this.group.rotation.y = this.facing + sw * 0.5;
+        this.lLeg.pivot.rotation.x = 0.1;
+        this.rLeg.pivot.rotation.x = -0.1;
+        this.lLeg.knee.rotation.x = 0.15;
+        this.rLeg.knee.rotation.x = 0.15;
+
+        if (p > 0.42 && !this.swingHitDone) {
+          this.swingHitDone = true;
+          if (dist < 2.6 && yDiff < 2) {
+            suitDamage.applyDamage('torso', CONFIG.combat.enemyDamage);
+            combat.hitFlash = 0.28;
+          }
+        }
+      } else {
+        this.swingHitDone = false;
+        this.rArm.pivot.rotation.x = -0.3;
+        this.rArm.pivot.rotation.z = -0.4;
+        this.rArm.elbow.rotation.x = -1.0;
+        this.lArm.pivot.rotation.x = -0.3;
+        this.lArm.pivot.rotation.z = 0.4;
+        this.lArm.elbow.rotation.x = -1.0;
+      }
+
+      if (dist > 2.4 || !canEngage) {
+        this.state = 'chase';
+      } else if (this.attackCooldown <= 0) {
+        this.swingTimer = 0.4;
+        this.attackCooldown = 1.5;
+      }
+      return;
+    }
+
+    if (canEngage) {
+      this.state = 'chase';
+      if (dist > 1.6) {
+        const nx = dx / dist, nz = dz / dist;
+        this.group.position.x += nx * this.speed * dt;
+        this.group.position.z += nz * this.speed * dt;
+        this.facing = Math.atan2(nx, nz);
+        this.walkPhase += dt * 9;
+        const ws = Math.sin(this.walkPhase);
+        this.lLeg.pivot.rotation.x = ws * 0.55;
+        this.rLeg.pivot.rotation.x = -ws * 0.55;
+        this.lLeg.knee.rotation.x = Math.max(0, -ws) * 0.65;
+        this.rLeg.knee.rotation.x = Math.max(0, ws) * 0.65;
+        this.lArm.pivot.rotation.x = -ws * 0.45 - 0.15;
+        this.rArm.pivot.rotation.x = ws * 0.45 - 0.15;
+        this.lArm.pivot.rotation.z = 0.16;
+        this.rArm.pivot.rotation.z = -0.16;
+        this.lArm.elbow.rotation.x = -0.55;
+        this.rArm.elbow.rotation.x = -0.55;
+      } else {
+        this.state = 'attack';
+        this.attackCooldown = 0.25;
+      }
+    } else {
+      this.roamTimer -= dt;
+      if (this.roamTimer <= 0) {
+        this.roamTimer = 2.5 + Math.random() * 3;
+        const ang = Math.random() * Math.PI * 2;
+        const r = Math.random() * 4;
+        this.roamTarget.x = this.homeX + Math.cos(ang) * r;
+        this.roamTarget.z = this.homeZ + Math.sin(ang) * r;
+      }
+      const tx = this.roamTarget.x - this.group.position.x;
+      const tz = this.roamTarget.z - this.group.position.z;
+      const td = Math.hypot(tx, tz);
+      if (td > 0.35) {
+        const nx = tx / td, nz = tz / td;
+        this.group.position.x += nx * 1.2 * dt;
+        this.group.position.z += nz * 1.2 * dt;
+        this.facing = Math.atan2(nx, nz);
+        this.walkPhase += dt * 4.5;
+        const ws = Math.sin(this.walkPhase);
+        this.lLeg.pivot.rotation.x = ws * 0.35;
+        this.rLeg.pivot.rotation.x = -ws * 0.35;
+        this.lLeg.knee.rotation.x = Math.max(0, -ws) * 0.4;
+        this.rLeg.knee.rotation.x = Math.max(0, ws) * 0.4;
+        this.lArm.pivot.rotation.x = -ws * 0.3 - 0.1;
+        this.rArm.pivot.rotation.x = ws * 0.3 - 0.1;
+        this.lArm.pivot.rotation.z = 0.16;
+        this.rArm.pivot.rotation.z = -0.16;
+        this.lArm.elbow.rotation.x = -0.5;
+        this.rArm.elbow.rotation.x = -0.5;
+      } else {
+        const b = Math.sin(performance.now() * 0.0018) * 0.02;
+        this.lArm.pivot.rotation.x = -0.1 + b;
+        this.rArm.pivot.rotation.x = -0.1 + b;
+        this.lArm.pivot.rotation.z = 0.16;
+        this.rArm.pivot.rotation.z = -0.16;
+        this.lArm.elbow.rotation.x = -0.45;
+        this.rArm.elbow.rotation.x = -0.45;
+        this.lLeg.pivot.rotation.x = 0.05;
+        this.rLeg.pivot.rotation.x = -0.05;
+        this.lLeg.knee.rotation.x = 0.05;
+        this.rLeg.knee.rotation.x = 0.05;
+      }
+    }
+    this.group.rotation.y = damp(this.group.rotation.y, this.facing, 6, dt);
+
+    const gy = getGroundHeight(this.group.position.x, this.group.position.z);
+    this.group.position.y = damp(this.group.position.y, gy + 0.19, 10, dt);
+  }
+}
+
+class EnemySystem {
+  constructor() {
+    this.enemies = [];
+  }
+  spawn(x, z) {
+    const y = getGroundHeight(x, z) + 0.19;
+    const e = new Enemy(x, z, y);
+    this.enemies.push(e);
+    return e;
+  }
+  update(dt, playerPos) {
+    for (const e of this.enemies) e.update(dt, playerPos);
+  }
+  findTarget(camera, maxDist) {
+    const camPos = camera.position.clone();
+    const camDir = new THREE.Vector3();
+    camera.getWorldDirection(camDir);
+    let best = null, bestScore = -Infinity;
+    for (const e of this.enemies) {
+      if (e.state === 'down' || e.state === 'webbed') continue;
+      const toEnemy = e.group.position.clone().add(new THREE.Vector3(0, 1.2, 0)).sub(camPos);
+      const dist = toEnemy.length();
+      if (dist > maxDist) continue;
+      toEnemy.normalize();
+      const dot = camDir.dot(toEnemy);
+      if (dot < 0.55) continue;
+      const score = dot * 12 - dist * 0.1;
+      if (score > bestScore) { bestScore = score; best = e; }
+    }
+    return best;
+  }
+  findMeleeTargets(player, range) {
+    const pp = player.position;
+    const forwardX = -Math.sin(player.rotation.y);
+    const forwardZ = -Math.cos(player.rotation.y);
+    const results = [];
+    for (const e of this.enemies) {
+      if (e.state === 'down') continue;
+      const dx = e.group.position.x - pp.x;
+      const dz = e.group.position.z - pp.z;
+      const dy = e.group.position.y - pp.y;
+      const d = Math.hypot(dx, dz);
+      if (d > range) continue;
+      if (Math.abs(dy) > 2.0) continue;
+      if (d > 0.001) {
+        const nx = dx / d, nz = dz / d;
+        const dot = forwardX * nx + forwardZ * nz;
+        if (dot < 0.0) continue;
+      }
+      results.push({ enemy: e, dx, dz, d });
+    }
+    return results;
+  }
+  nearbyAlive(px, pz, radius) {
+    let count = 0;
+    for (const e of this.enemies) {
+      if (e.state === 'down') continue;
+      const d = Math.hypot(e.group.position.x - px, e.group.position.z - pz);
+      if (d < radius) count++;
+    }
+    return count;
+  }
+}
+
+const enemySystem = new EnemySystem();
+
+const combat = {
+  punchTimer: 0,
+  punchDuration: CONFIG.combat.punchDuration,
+  punchCombo: 0,
+  lastPunchAt: -100,
+  hitChecked: false,
+  webTimer: 0,
+  webDuration: CONFIG.combat.webDuration,
+  webTarget: null,
+  webFired: false,
+  webVisualTimer: 0,
+  webVisualStart: new THREE.Vector3(),
+  webVisualEnd: new THREE.Vector3(),
+  hitFlash: 0,
+  comboTimer: 0,
+  comboDisplay: 0,
+
+  tryPunch() {
+    if (this.punchTimer > 0) return;
+    if (ps.state === State.SWINGING) return;
+    if (ps.state === State.WALL_CRAWL) return;
+    const now = performance.now() / 1000;
+    if (now - this.lastPunchAt > CONFIG.combat.comboTimeout) this.punchCombo = 0;
+    else this.punchCombo++;
+    this.lastPunchAt = now;
+    this.punchTimer = this.punchDuration;
+    this.hitChecked = false;
+  },
+
+  tryWeb() {
+    if (this.webTimer > 0) return;
+    if (ps.state === State.SWINGING) return;
+    if (ps.state === State.WALL_CRAWL) return;
+    const target = enemySystem.findTarget(camera, CONFIG.combat.webRange);
+    if (!target) return;
+    this.webTimer = this.webDuration;
+    this.webTarget = target;
+    this.webFired = false;
+  },
+
+  update(dt, player) {
+    if (this.hitFlash > 0) this.hitFlash -= dt;
+    if (this.comboTimer > 0) {
+      this.comboTimer -= dt;
+      if (this.comboTimer <= 0) this.comboDisplay = 0;
+    }
+
+    if (this.punchTimer > 0) {
+      this.punchTimer -= dt;
+      const p = 1 - this.punchTimer / this.punchDuration;
+      if (p >= 0.28 && p <= 0.6 && !this.hitChecked) {
+        this.hitChecked = true;
+        const targets = enemySystem.findMeleeTargets(player, CONFIG.combat.punchReach);
+        let hits = 0;
+        for (const t of targets) {
+          const strength = 1 - t.d / CONFIG.combat.punchReach;
+          t.enemy.takeDamage(
+            CONFIG.combat.punchDamage,
+            { x: t.dx / Math.max(t.d, 0.01), z: t.dz / Math.max(t.d, 0.01) },
+            CONFIG.combat.punchKnockback + strength * 4
+          );
+          hits++;
+        }
+        if (hits > 0) {
+          this.comboTimer = 1.5;
+          this.comboDisplay = Math.max(this.comboDisplay, this.punchCombo + 1);
+          const fwd = new THREE.Vector3(-Math.sin(player.rotation.y), 0, -Math.cos(player.rotation.y));
+          player.position.addScaledVector(fwd, 0.22);
+        }
+      }
+    }
+
+    if (this.webTimer > 0) {
+      this.webTimer -= dt;
+      const p = 1 - this.webTimer / this.webDuration;
+      if (p >= 0.35 && !this.webFired && this.webTarget) {
+        this.webFired = true;
+        const hand = player.userData.rig.rArm.hand;
+        hand.getWorldPosition(this.webVisualStart);
+        this.webVisualEnd.copy(this.webTarget.group.position).add(new THREE.Vector3(0, 1.2, 0));
+        this.webTarget.webUp();
+        this.webVisualTimer = 0.32;
+      }
+    }
+
+    if (this.webVisualTimer > 0) {
+      this.webVisualTimer -= dt;
+      setWebLine(combatWebMesh, this.webVisualStart, this.webVisualEnd);
+    } else {
+      combatWebMesh.visible = false;
+    }
+  }
+};
+
+function findSwingAnchor() {
+  const origin = _v1.copy(player.position); origin.y += 1.5;
+  const camFwd = _v2.set(0, 0, 0);
+  camera.getWorldDirection(camFwd); camFwd.y = 0;
+  if (camFwd.lengthSq() < 1e-5) camFwd.set(0, 0, -1);
+  camFwd.normalize();
+  const yawBase = Math.atan2(camFwd.x, camFwd.z);
+
+  let best = null, bestScore = -Infinity;
+  for (let h = -55; h <= 55; h += 8) {
+    for (let v = 12; v <= 86; v += 8) {
+      const yaw = yawBase + h * Math.PI / 180;
+      const pitch = v * Math.PI / 180;
+      const dir = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+      _ray.set(origin, dir);
+      const hits = _ray.intersectObject(cityMesh, false);
+      if (hits.length) {
+        const t = hits[0].distance;
+        if (t > CONFIG.swing.minRope && t < CONFIG.swing.maxRope) {
+          const score = -Math.abs(t - CONFIG.swing.idealDistance) * 0.6 - Math.abs(v - 50) * 1.2 - Math.abs(h) * 0.35;
+          if (score > bestScore) { bestScore = score; best = hits[0].point.clone(); }
+        }
+      }
+    }
+  }
+  if (!best) {
+    const heightAbove = clamp(30 - player.position.y * 0.05, 18, 34);
+    best = origin.clone().addScaledVector(camFwd, 14).add(new THREE.Vector3(0, heightAbove, 0));
+  }
+  return best;
+}
+
+function beginSwing() {
+  if (ps.swingCooldown > 0) return false;
+  const anchor = findSwingAnchor();
+  if (!anchor) return false;
+  ps.state = State.SWINGING;
+  ps.anchor.copy(anchor);
+  ps.swingTime = 0;
+  ps.handSide = -ps.handSide;
+  const dist = player.position.distanceTo(anchor);
+  ps.ropeLength = clamp(dist, CONFIG.swing.minRope, CONFIG.swing.maxRope);
+  if (ps.vel.y < -10) ps.vel.y *= 0.55;
+  ps.vel.y = Math.max(ps.vel.y, 1.5);
+  const toAnchor = _v1.copy(anchor).sub(player.position).normalize();
+  const fwd = _v2.set(0, 0, 0);
+  camera.getWorldDirection(fwd); fwd.y = 0;
+  if (fwd.lengthSq() < 1e-5) fwd.set(0, 0, -1);
+  fwd.normalize();
+  const tangent = fwd.clone().addScaledVector(toAnchor, -fwd.dot(toAnchor));
+  if (tangent.lengthSq() < 1e-5) tangent.set(0, 0, -1);
+  else tangent.normalize();
+  ps.swingDir.copy(tangent);
+  ps.swingCooldown = 0.05;
+  return true;
+}
+
+function endSwing() {
+  if (ps.state !== State.SWINGING) return;
+  ps.state = State.AIRBORNE;
+  ps.vel.multiplyScalar(CONFIG.swing.releaseBoost);
+  if (ps.vel.y < 0) ps.vel.y += CONFIG.swing.releaseLift;
+  webMesh.visible = false;
+}
+
+function findWall() {
+  const origin = _v1.copy(player.position); origin.y += 1.1;
+  let best = null, bestDist = CONFIG.wall.detectRange;
+  for (const dir of _wallRays) {
+    _ray.set(origin, dir);
+    _ray.far = CONFIG.wall.detectRange;
+    const hits = _ray.intersectObject(cityMesh, false);
+    if (hits.length && hits[0].distance < bestDist) {
+      bestDist = hits[0].distance;
+      best = { point: hits[0].point.clone(), normal: dir.clone().negate() };
+    }
+  }
+  _ray.far = CONFIG.swing.maxRope;
+  return best;
+}
+
+function getGroundHeight(x, z) {
+  let h = 0;
+  for (let i = 0; i < buildings.length; i++) {
+    const b = buildings[i];
+    if (x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ) if (b.maxY > h) h = b.maxY;
+  }
+  return h;
+}
+
+function collideBuildings(pos, vel, radius) {
+  for (let i = 0; i < buildings.length; i++) {
+    const b = buildings[i];
+    if (pos.y - radius > b.maxY) continue;
+    if (pos.y + 1.8 < 0) continue;
+    const cx = clamp(pos.x, b.minX, b.maxX);
+    const cz = clamp(pos.z, b.minZ, b.maxZ);
+    const dx = pos.x - cx, dz = pos.z - cz;
+    const d2 = dx*dx + dz*dz;
+    if (d2 < radius*radius && d2 > 1e-6) {
+      const d = Math.sqrt(d2);
+      const push = radius - d;
+      const nx = dx/d, nz = dz/d;
+      pos.x += nx * push; pos.z += nz * push;
+      const vn = vel.x * nx + vel.z * nz;
+      if (vn < 0) { vel.x -= vn * nx; vel.z -= vn * nz; }
+    }
+  }
+}
+
+const cam = {
+  yaw: 0, pitch: -0.15, dist: CONFIG.camera.baseDistance,
+  smoothedPos: new THREE.Vector3(0, 120, 15),
+  smoothedLook: new THREE.Vector3(0, 120, 0),
+  bank: 0,
+};
+
+function updateCamera(dt, speed) {
+  const target = player.position.clone();
+  target.y += CONFIG.camera.height;
+  const distTarget = CONFIG.camera.baseDistance + Math.max(0, speed - 8) * CONFIG.camera.speedDistanceGain;
+  cam.dist = damp(cam.dist, distTarget, 4, dt);
+  const cosP = Math.cos(cam.pitch), sinP = Math.sin(cam.pitch);
+  const offX = Math.sin(cam.yaw) * cosP * cam.dist;
+  const offY = sinP * cam.dist + 0.7;
+  const offZ = Math.cos(cam.yaw) * cosP * cam.dist;
+  const desiredPos = new THREE.Vector3(target.x + offX, target.y + offY, target.z + offZ);
+  const laX = ps.vel.x * (0.10 + speed * 0.004);
+  const laZ = ps.vel.z * (0.10 + speed * 0.004);
+  const desiredLook = new THREE.Vector3(player.position.x + laX, player.position.y + 1.3, player.position.z + laZ);
+  const posLambda = cam.smoothedPos.distanceTo(desiredPos) > 20 ? 22 : CONFIG.camera.smooth;
+  cam.smoothedPos.lerp(desiredPos, 1 - Math.exp(-posLambda * dt));
+  cam.smoothedLook.lerp(desiredLook, 1 - Math.exp(-CONFIG.camera.smooth * 0.9 * dt));
+  camera.position.copy(cam.smoothedPos);
+  camera.lookAt(cam.smoothedLook);
+  const fovTarget = lerp(CONFIG.camera.fovBase, CONFIG.camera.fovSprint, clamp((speed - 6) / 26, 0, 1));
+  camera.fov = damp(camera.fov, fovTarget, 5, dt);
+  camera.updateProjectionMatrix();
+  let bankTarget = 0;
+  if (ps.state === State.SWINGING) {
+    const right = new THREE.Vector3(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
+    bankTarget = clamp(ps.vel.dot(right) * 0.012, -0.12, 0.12);
+  }
+  cam.bank = damp(cam.bank, bankTarget, 4, dt);
+  camera.rotateZ(cam.bank);
+}
+
+function updateMenuCamera(dt) {
+  const t = ps.time;
+  const px = player.position.x, pz = player.position.z, roofY = App.heroRoofY;
+  const camX = px - 3.6 + Math.sin(t * 0.13) * 0.15;
+  const camY = roofY + 1.9 + Math.sin(t * 0.21) * 0.08;
+  const camZ = pz - 2.0 + Math.cos(t * 0.17) * 0.15;
+  cam.smoothedPos.lerp(new THREE.Vector3(camX, camY, camZ), 1 - Math.exp(-2.4 * dt));
+  cam.smoothedLook.lerp(new THREE.Vector3(px + 10, roofY - 8, pz + 2), 1 - Math.exp(-2.4 * dt));
+  camera.position.copy(cam.smoothedPos);
+  camera.lookAt(cam.smoothedLook);
+  camera.fov = damp(camera.fov, 46, 3, dt);
+  camera.updateProjectionMatrix();
+}
+
+const keys = Object.create(null);
+const input = { sprint: false, jump: false, pointerLocked: false };
+
+window.addEventListener('keydown', (e) => {
+  const k = e.code;
+  if (k === 'Enter') { e.preventDefault(); if (App.mode === 'MENU') { startGame(); return; } }
+  if (k === 'Space') { e.preventDefault(); }
+  if (keys[k]) return;
+  keys[k] = true;
+
+  if (k === 'KeyD' && App.mode === 'PLAY') combat.tryPunch();
+  if (k === 'KeyF' && App.mode === 'PLAY') combat.tryWeb();
+
+  if (k === 'Space') input.jump = true;
+  if (k === 'ShiftLeft' || k === 'ShiftRight') input.sprint = true;
+});
+window.addEventListener('keyup', (e) => {
+  const k = e.code;
+  keys[k] = false;
+  if (k === 'Space') { input.jump = false; if (ps.state === State.SWINGING) endSwing(); }
+  if (k === 'ShiftLeft' || k === 'ShiftRight') input.sprint = false;
+});
+renderer.domElement.addEventListener('click', () => {
+  if (App.mode === 'PLAY' && !input.pointerLocked) renderer.domElement.requestPointerLock();
+  if (App.mode === 'PLAY' && input.pointerLocked) combat.tryPunch();
+});
+document.addEventListener('contextmenu', (e) => {
+  if (App.mode === 'PLAY' && input.pointerLocked) {
+    e.preventDefault();
+    combat.tryWeb();
+  }
+});
+document.addEventListener('pointerlockchange', () => {
+  input.pointerLocked = document.pointerLockElement === renderer.domElement;
+  document.getElementById('clickHint').classList.toggle('show', App.mode === 'PLAY' && !input.pointerLocked);
+});
+document.addEventListener('mousemove', (e) => {
+  if (!input.pointerLocked) return;
+  const s = CONFIG.camera.mouseSensitivity;
+  cam.yaw   += e.movementX * s;
+  cam.pitch  = clamp(cam.pitch + e.movementY * s, -1.15, 0.95);
+});
+window.addEventListener('resize', () => {
+  const w = window.innerWidth, h = window.innerHeight;
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  renderer.setSize(w, h); composer.setSize(w, h);
+});
+
+const menuEl = document.getElementById('menu');
+const hudEl = document.getElementById('hud');
+const hudHintEl = document.getElementById('hudHint');
+
+function startGame() {
+  if (App.mode !== 'MENU') return;
+  App.mode = 'TRANSITION';
+  App.transitionT = 0;
+  menuEl.classList.add('fading');
+  setTimeout(() => menuEl.classList.add('hidden'), 1400);
+  setTimeout(() => menuEl.classList.add('gone'), 3200);
+  setTimeout(() => {
+    hudEl.classList.add('visible');
+    if (!input.pointerLocked) renderer.domElement.requestPointerLock();
+    setTimeout(() => { if (input.pointerLocked) hudHintEl.style.opacity = '0.3'; }, 6000);
+  }, 900);
+}
+
+let heroBuildingRef = null;
+
+function setupMenuScene() {
+  let hero = null, bestScore = -Infinity;
+  for (const b of buildings) {
+    const score = b.maxY - Math.hypot(b.cx, b.cz) * 0.6;
+    if (score > bestScore) { bestScore = score; hero = b; }
+  }
+  heroBuildingRef = hero;
+  App.heroRoofY = hero.maxY;
+  const roofSurfaceY = hero.maxY + 0.30;
+  const px = hero.maxX - 0.10, pz = hero.cz, py = roofSurfaceY - 0.635;
+  player.position.set(px, py, pz);
+  player.rotation.y = Math.PI / 2;
+  App.sitBlend = 1;
+  const rig = player.userData.rig;
+  rig.pizzaGroup.visible = true;
+  rig.boxGroup.position.set(hero.maxX - 0.9, roofSurfaceY + 0.02, pz - 0.5);
+  rig.boxGroup.rotation.y = -0.35;
+  rig.boxGroup.visible = true;
+  cam.smoothedPos.set(px - 3.6, hero.maxY + 1.9, pz - 2.0);
+  cam.smoothedLook.set(px + 10, hero.maxY - 8, pz + 2);
+  camera.position.copy(cam.smoothedPos);
+  camera.lookAt(cam.smoothedLook);
+  camera.fov = 46;
+  camera.updateProjectionMatrix();
+}
+setupMenuScene();
+
+(function spawnEnemies() {
+  const hero = heroBuildingRef;
+  if (!hero) return;
+  for (let i = 0; i < 3; i++) {
+    const ox = -2 - i * 2.2;
+    const oz = (i - 1) * 5.5;
+    enemySystem.spawn(hero.cx + ox, hero.cz + oz);
+  }
+  for (let i = 0; i < 8; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const r = 10 + Math.random() * 20;
+    const x = hero.cx + Math.cos(ang) * r;
+    const z = hero.cz + Math.sin(ang) * r;
+    enemySystem.spawn(x, z);
+  }
+  const nearby = buildings
+    .filter(b => b !== hero && b.maxY > 40 && b.maxY < 200 && b.w > 10 && b.d > 10)
+    .sort((a, b) => {
+      const da = Math.hypot(a.cx - hero.cx, a.cz - hero.cz);
+      const db = Math.hypot(b.cx - hero.cx, b.cz - hero.cz);
+      return da - db;
+    })
+    .slice(0, 4);
+  for (const b of nearby) {
+    enemySystem.spawn(b.cx + rand(-2, 2), b.cz + rand(-2, 2));
+  }
+})();
+
+const J = {
+  lLegX: 0, lLegZ: 0, lKneeX: 0, lFootX: 0,
+  rLegX: 0, rLegZ: 0, rKneeX: 0, rFootX: 0,
+  lArmX: 0, lArmY: 0, lArmZ: 0, lElbowX: 0, lElbowY: 0,
+  rArmX: 0, rArmY: 0, rArmZ: 0, rElbowX: 0, rElbowY: 0,
+  torsoX: 0, torsoY: 0, torsoZ: 0,
+  headX: 0, headY: 0, headZ: 0,
+};
+const T = { ...J };
+const S = { leg: 14, arm: 16, torso: 12, head: 10 };
+const headSpring = { y: 0, vy: 0, x: 0, vx: 0 };
+
+function poseIdle(t) {
+  const breathe = Math.sin(t * 1.5) * 1;
+  const sway = Math.sin(t * 0.7) * 1;
+  T.lLegX = 0.02; T.lLegZ = 0.03;
+  T.rLegX = -0.02; T.rLegZ = -0.03;
+  T.lKneeX = 0.06 + breathe * 0.01;
+  T.rKneeX = 0.06 + breathe * 0.01;
+  T.lFootX = 0; T.rFootX = 0;
+  T.lArmX = 0.12 + breathe * 0.03; T.lArmZ = 0.26; T.lArmY = 0;
+  T.rArmX = 0.12 + breathe * 0.03; T.rArmZ = -0.26; T.rArmY = 0;
+  T.lElbowX = -0.32 - breathe * 0.04; T.lElbowY = 0;
+  T.rElbowX = -0.32 - breathe * 0.04; T.rElbowY = 0;
+  T.torsoX = 0.02 + breathe * 0.008;
+  T.torsoY = sway * 0.02;
+  T.torsoZ = 0;
+  T.headX = -breathe * 0.01;
+  T.headY = sway * 0.03;
+  T.headZ = 0;
+  S.leg = 8; S.arm = 8; S.torso = 6; S.head = 6;
+}
+
+function poseRun(t, speedNorm, vel) {
+  const cycleSpeed = lerp(7.5, 10.5, speedNorm);
+  ps.runPhase += cycleSpeed * (1/60);
+  const p = ps.runPhase;
+  const lSwing = Math.sin(p);
+  const rSwing = Math.sin(p + Math.PI);
+  const amp = lerp(0.55, 1.05, speedNorm);
+  T.lLegX = -lSwing * amp;
+  T.rLegX = -rSwing * amp;
+  const lKneeBend = Math.max(0, -lSwing) * 1.6 + 0.15;
+  const rKneeBend = Math.max(0, -rSwing) * 1.6 + 0.15;
+  T.lKneeX = lKneeBend * speedNorm;
+  T.rKneeX = rKneeBend * speedNorm;
+  T.lFootX = lerp(-0.35, 0.15, (lSwing + 1) * 0.5);
+  T.rFootX = lerp(-0.35, 0.15, (rSwing + 1) * 0.5);
+  T.lLegZ = 0.03; T.rLegZ = -0.03;
+  const armAmp = lerp(0.5, 1.0, speedNorm);
+  T.lArmX = 0.15 + rSwing * armAmp;
+  T.rArmX = 0.15 + lSwing * armAmp;
+  const tuck = lerp(0.28, 0.42, speedNorm);
+  T.lArmZ = tuck; T.rArmZ = -tuck;
+  T.lElbowX = -0.35 - Math.max(0, rSwing) * 0.6 * speedNorm;
+  T.rElbowX = -0.35 - Math.max(0, lSwing) * 0.6 * speedNorm;
+  T.torsoX = 0.15 + speedNorm * 0.18;
+  T.torsoY = 0;
+  T.torsoZ = lSwing * 0.05 * speedNorm;
+  T.headX = -0.1 - speedNorm * 0.15;
+  T.headY = 0;
+  T.headZ = -lSwing * 0.03;
+  S.leg = 20; S.arm = 22; S.torso = 14; S.head = 12;
+}
+
+function poseAirborne(t, vel, speedNorm) {
+  const fallSpeed = clamp(-vel.y / 25, 0, 1);
+  const riseSpeed = clamp(vel.y / 15, 0, 1);
+  if (riseSpeed > 0.2) {
+    const r = riseSpeed;
+    T.lLegX = -0.5 * r - 0.1;
+    T.rLegX = -0.3 * r - 0.1;
+    T.lKneeX = 1.1 * r + 0.2;
+    T.rKneeX = 0.9 * r + 0.15;
+    T.lFootX = -0.2; T.rFootX = -0.2;
+    T.lArmX = -1.0 - r * 0.4;
+    T.rArmX = -1.0 - r * 0.4;
+    T.lArmZ = 0.4; T.rArmZ = -0.4;
+    T.lElbowX = -0.5 - r * 0.3;
+    T.rElbowX = -0.5 - r * 0.3;
+    T.torsoX = 0.05 + r * 0.1;
+    T.headX = -0.1;
+  } else {
+    const f = fallSpeed;
+    const flail = Math.sin(t * 6) * 0.1 * f;
+    T.lLegX = -0.35 - f * 0.3 + flail;
+    T.rLegX = -0.35 - f * 0.3 - flail;
+    T.lKneeX = 0.5 + f * 0.4;
+    T.rKneeX = 0.5 + f * 0.4;
+    T.lFootX = -0.15; T.rFootX = -0.15;
+    T.lArmX = -0.9 - f * 0.5;
+    T.rArmX = -0.9 - f * 0.5;
+    T.lArmZ = 0.9 + f * 0.2;
+    T.rArmZ = -0.9 - f * 0.2;
+    T.lElbowX = -0.25;
+    T.rElbowX = -0.25;
+    T.torsoX = 0.15 + f * 0.15;
+    T.headX = -0.2;
+  }
+  S.leg = 10; S.arm = 10; S.torso = 8; S.head = 8;
+}
+
+function poseDive(t, vel) {
+  T.lLegX = 0.35; T.rLegX = 0.32;
+  T.lKneeX = 0.15; T.rKneeX = 0.15;
+  T.lFootX = -0.3; T.rFootX = -0.3;
+  T.lLegZ = 0.05; T.rLegZ = -0.05;
+  T.lArmX = -1.65; T.rArmX = -1.65;
+  T.lArmZ = 0.15; T.rArmZ = -0.15;
+  T.lElbowX = -0.15; T.rElbowX = -0.15;
+  T.torsoX = 0.55;
+  T.headX = -0.5;
+  S.leg = 8; S.arm = 8; S.torso = 10; S.head = 12;
+}
+
+function poseSwing(t, vel, speedNorm) {
+  const p = ps.swingTime;
+  const activeIsR = ps.handSide > 0;
+  const toAnchor = _v1.copy(ps.anchor).sub(player.position).normalize();
+  const vNorm = _v2.copy(vel).normalize();
+  const arcAngle = toAnchor.dot(vNorm);
+  const arch = clamp(arcAngle * 1.2, -0.4, 0.4);
+  const legTrail = Math.sin(p * 4) * 0.05;
+  T.lLegX = 0.25 + arch * 0.5 + legTrail;
+  T.rLegX = 0.28 + arch * 0.5 - legTrail;
+  T.lKneeX = 0.5 - arch * 0.3;
+  T.rKneeX = 0.45 - arch * 0.3;
+  T.lFootX = -0.4; T.rFootX = -0.4;
+  T.lLegZ = 0.05; T.rLegZ = -0.05;
+  const activeArmReach = -2.5 - arch * 0.3;
+  const idleArmReach = -1.7 - arch * 0.2;
+  if (activeIsR) {
+    T.rArmX = activeArmReach; T.lArmX = idleArmReach;
+    T.rArmZ = -0.18; T.lArmZ = 0.55;
+    T.rElbowX = -0.05; T.lElbowX = -0.55;
+  } else {
+    T.lArmX = activeArmReach; T.rArmX = idleArmReach;
+    T.lArmZ = 0.18; T.rArmZ = -0.55;
+    T.lElbowX = -0.05; T.rElbowX = -0.55;
+  }
+  const right = _v3.set(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
+  const bank = clamp(vel.dot(right) * 0.014, -0.4, 0.4);
+  T.torsoX = 0.25 + arch * 0.4;
+  T.torsoZ = bank;
+  T.torsoY = 0;
+  T.headX = -0.2 - arch * 0.2;
+  T.headY = 0;
+  T.headZ = bank * 0.3;
+  S.leg = 12; S.arm = 14; S.torso = 10; S.head = 10;
+}
+
+function poseWallCrawl(t, vel, speedNorm, wallNormal) {
+  // Animate based on the actual wall velocity, so climbing looks alive
+  const velMag = vel.length();
+  const anim = clamp(velMag / CONFIG.wall.crawlSpeed, 0, 1);
+  const crawl = Math.sin(t * 8) * 0.15 * anim;
+
+  T.lLegX = 0.15;
+  T.rLegX = 0.15;
+  T.lLegZ = 0.55 + Math.sin(t * 4) * 0.15 * anim;
+  T.rLegZ = -0.55 + Math.sin(t * 4 + 1) * 0.15 * anim;
+  T.lKneeX = 1.35;
+  T.rKneeX = 1.35;
+  T.lFootX = -0.4; T.rFootX = -0.4;
+  T.lArmX = -0.6 + crawl;
+  T.rArmX = -0.6 - crawl;
+  T.lArmZ = 1.1 + Math.cos(t * 4) * 0.1 * anim;
+  T.rArmZ = -1.1 + Math.cos(t * 4 + 1) * 0.1 * anim;
+  T.lElbowX = -1.4; T.rElbowX = -1.4;
+  T.torsoX = 0.35;
+  T.torsoZ = 0;
+  T.headX = -0.3; T.headY = 0; T.headZ = 0;
+  S.leg = 12; S.arm = 14; S.torso = 8; S.head = 8;
+}
+
+function poseLanding(t, intensity, phase) {
+  const crouch = intensity * (1 - phase);
+  T.lLegX = 0.7 * crouch + 0.02;
+  T.rLegX = 0.65 * crouch + 0.02;
+  T.lKneeX = 1.6 * crouch + 0.06;
+  T.rKneeX = 1.55 * crouch + 0.06;
+  T.lFootX = -0.4 * crouch;
+  T.rFootX = -0.4 * crouch;
+  T.lLegZ = 0.15 * crouch;
+  T.rLegZ = -0.15 * crouch;
+  T.lArmX = -0.9 * crouch + 0.12;
+  T.rArmX = -0.9 * crouch + 0.12;
+  T.lArmZ = 0.5 * crouch + 0.26;
+  T.rArmZ = -0.5 * crouch - 0.26;
+  T.lElbowX = -0.5 * crouch - 0.3;
+  T.rElbowX = -0.5 * crouch - 0.3;
+  T.torsoX = 0.35 * crouch + 0.02;
+  T.torsoZ = 0;
+  T.headX = 0.25 * crouch;
+  T.headY = 0;
+  T.headZ = 0;
+  S.leg = 18; S.arm = 18; S.torso = 14; S.head = 14;
+}
+
+function applyPoseToRig(rig, dt) {
+  const dLeg = 1 - Math.exp(-S.leg * dt);
+  const dArm = 1 - Math.exp(-S.arm * dt);
+  const dTor = 1 - Math.exp(-S.torso * dt);
+  const dHead = 1 - Math.exp(-S.head * dt);
+
+  J.lLegX += (T.lLegX - J.lLegX) * dLeg;
+  J.lLegZ += (T.lLegZ - J.lLegZ) * dLeg;
+  J.lKneeX += (T.lKneeX - J.lKneeX) * dLeg;
+  J.lFootX += (T.lFootX - J.lFootX) * dLeg;
+  J.rLegX += (T.rLegX - J.rLegX) * dLeg;
+  J.rLegZ += (T.rLegZ - J.rLegZ) * dLeg;
+  J.rKneeX += (T.rKneeX - J.rKneeX) * dLeg;
+  J.rFootX += (T.rFootX - J.rFootX) * dLeg;
+
+  J.lArmX += (T.lArmX - J.lArmX) * dArm;
+  J.lArmY += (T.lArmY - J.lArmY) * dArm;
+  J.lArmZ += (T.lArmZ - J.lArmZ) * dArm;
+  J.lElbowX += (T.lElbowX - J.lElbowX) * dArm;
+  J.lElbowY += (T.lElbowY - J.lElbowY) * dArm;
+  J.rArmX += (T.rArmX - J.rArmX) * dArm;
+  J.rArmY += (T.rArmY - J.rArmY) * dArm;
+  J.rArmZ += (T.rArmZ - J.rArmZ) * dArm;
+  J.rElbowX += (T.rElbowX - J.rElbowX) * dArm;
+  J.rElbowY += (T.rElbowY - J.rElbowY) * dArm;
+
+  J.torsoX += (T.torsoX - J.torsoX) * dTor;
+  J.torsoY += (T.torsoY - J.torsoY) * dTor;
+  J.torsoZ += (T.torsoZ - J.torsoZ) * dTor;
+
+  J.headX += (T.headX - J.headX) * dHead;
+  J.headY += (T.headY - J.headY) * dHead;
+  J.headZ += (T.headZ - J.headZ) * dHead;
+
+  rig.lLeg.pivot.rotation.x = J.lLegX;
+  rig.lLeg.pivot.rotation.z = J.lLegZ;
+  rig.lLeg.knee.rotation.x = J.lKneeX;
+  rig.lLeg.foot.rotation.x = J.lFootX;
+  rig.rLeg.pivot.rotation.x = J.rLegX;
+  rig.rLeg.pivot.rotation.z = J.rLegZ;
+  rig.rLeg.knee.rotation.x = J.rKneeX;
+  rig.rLeg.foot.rotation.x = J.rFootX;
+
+  rig.lArm.pivot.rotation.x = J.lArmX;
+  rig.lArm.pivot.rotation.y = J.lArmY;
+  rig.lArm.pivot.rotation.z = J.lArmZ;
+  rig.lArm.elbow.rotation.x = J.lElbowX;
+  rig.lArm.elbow.rotation.y = J.lElbowY;
+  rig.rArm.pivot.rotation.x = J.rArmX;
+  rig.rArm.pivot.rotation.y = J.rArmY;
+  rig.rArm.pivot.rotation.z = J.rArmZ;
+  rig.rArm.elbow.rotation.x = J.rElbowX;
+  rig.rArm.elbow.rotation.y = J.rElbowY;
+
+  rig.torso.rotation.x = J.torsoX;
+  rig.torso.rotation.y = J.torsoY;
+  rig.torso.rotation.z = J.torsoZ;
+
+  rig.headGroup.rotation.x = J.headX;
+  rig.headGroup.rotation.y = J.headY;
+  rig.headGroup.rotation.z = J.headZ;
+}
+
+function animateGameplay(rig, dt, speed) {
+  const t = ps.time;
+  const speedNorm = clamp(speed / CONFIG.player.runSpeed, 0, 1.6);
+  let torsoBob = 0;
+
+  if (ps.state === State.GROUNDED) {
+    const moving = speed > 0.5;
+    if (moving) {
+      poseRun(t, speedNorm, ps.vel);
+      const bounce = Math.abs(Math.sin(ps.runPhase)) * 0.055 * speedNorm;
+      torsoBob = -bounce;
+    } else {
+      poseIdle(t);
+      torsoBob = 0;
+    }
+    if (speed > 0.5) {
+      const dir = _v1.copy(ps.vel).setY(0).normalize();
+      player.rotation.y = damp(player.rotation.y, Math.atan2(dir.x, dir.z), 14, dt);
+    }
+  }
+  else if (ps.state === State.SWINGING) {
+    poseSwing(t, ps.vel, speedNorm);
+    const dir = _v1.copy(ps.vel).setY(0);
+    if (dir.lengthSq() > 0.5) {
+      dir.normalize();
+      player.rotation.y = damp(player.rotation.y, Math.atan2(dir.x, dir.z), 8, dt);
+    }
+  }
+  else if (ps.state === State.WALL_CRAWL) {
+    poseWallCrawl(t, ps.vel, speedNorm, ps.wallNormal);
+    // FIXED: face INTO the wall (previous sign was reversed)
+    const yaw = Math.atan2(ps.wallNormal.x, ps.wallNormal.z);
+    player.rotation.y = damp(player.rotation.y, yaw, 14, dt);
+  }
+  else if (ps.state === State.LANDING) {
+    const phase = clamp(1 - ps.landTimer / 0.45, 0, 1);
+    poseLanding(t, ps.landIntensity, phase);
+  }
+  else {
+    if (input.sprint && ps.vel.y < -6) {
+      poseDive(t, ps.vel);
+    } else {
+      poseAirborne(t, ps.vel, speedNorm);
+    }
+    const dir = _v1.copy(ps.vel).setY(0);
+    if (dir.lengthSq() > 0.5) {
+      dir.normalize();
+      player.rotation.y = damp(player.rotation.y, Math.atan2(dir.x, dir.z), 6, dt);
+    }
+  }
+
+  if (combat.punchTimer > 0) {
+    const p = 1 - combat.punchTimer / combat.punchDuration;
+    const extend = Math.sin(p * Math.PI);
+    const combo = combat.punchCombo % 3;
+    if (combo === 0) {
+      T.rArmX = lerp(T.rArmX, -1.9, extend);
+      T.rElbowX = lerp(T.rElbowX, -0.05, extend);
+      T.rArmZ = lerp(T.rArmZ, -0.15, extend);
+      T.torsoY = lerp(T.torsoY, 0.35, extend);
+    } else if (combo === 1) {
+      T.lArmX = lerp(T.lArmX, -1.9, extend);
+      T.lElbowX = lerp(T.lElbowX, -0.05, extend);
+      T.lArmZ = lerp(T.lArmZ, 0.15, extend);
+      T.torsoY = lerp(T.torsoY, -0.35, extend);
+    } else {
+      T.rArmX = lerp(T.rArmX, -1.3, extend);
+      T.rArmZ = lerp(T.rArmZ, -1.5, extend);
+      T.rElbowX = lerp(T.rElbowX, -0.9, extend);
+      T.torsoY = lerp(T.torsoY, 0.5, extend);
+    }
+    S.arm = 24;
+    S.torso = 20;
+  }
+
+  if (combat.webTimer > 0) {
+    const p = 1 - combat.webTimer / combat.webDuration;
+    const extend = Math.sin(p * Math.PI);
+    T.rArmX = lerp(T.rArmX, -1.4, extend);
+    T.rArmZ = lerp(T.rArmZ, -0.1, extend);
+    T.rElbowX = lerp(T.rElbowX, -0.1, extend);
+    T.lArmX = lerp(T.lArmX, 0.2, extend * 0.5);
+    S.arm = 26;
+  }
+
+  applyPoseToRig(rig, dt);
+
+  headSpring.y = damp(headSpring.y, torsoBob, 18, dt);
+  rig.torso.position.y = 1.32 + headSpring.y;
+  const headTargetY = 1.78 + headSpring.y * 0.6;
+  rig.headGroup.position.y = damp(rig.headGroup.position.y, headTargetY, 16, dt);
+}
+
+function applySitPose(rig, dt, t, blend) {
+  const breathe = Math.sin(t * 1.35) * 0.022;
+  const sway = Math.sin(t * 0.55) * 0.025;
+  const sit = {
+    lLegPivotX: -1.55, rLegPivotX: -1.48,
+    lLegPivotZ: 0.08, rLegPivotZ: -0.14,
+    lKneeX: 1.50, rKneeX: 1.42,
+    lArmX: 0.60 + breathe * 0.4, lArmZ: 0.50,
+    lElbowX: 0.35,
+    rArmX: -0.85 + breathe * 0.5, rArmZ: -0.42,
+    rElbowX: -1.85,
+    torsoX: 0.12 + sway * 0.6, torsoZ: 0,
+    headX: 0.42 + breathe * 0.5, headY: -0.05,
+  };
+  const g = {
+    lLegPivotX: rig.lLeg.pivot.rotation.x, rLegPivotX: rig.rLeg.pivot.rotation.x,
+    lLegPivotZ: rig.lLeg.pivot.rotation.z, rLegPivotZ: rig.rLeg.pivot.rotation.z,
+    lKneeX: rig.lLeg.knee.rotation.x, rKneeX: rig.rLeg.knee.rotation.x,
+    lArmX: rig.lArm.pivot.rotation.x, rArmX: rig.rArm.pivot.rotation.x,
+    lArmZ: rig.lArm.pivot.rotation.z, rArmZ: rig.rArm.pivot.rotation.z,
+    lElbowX: rig.lArm.elbow.rotation.x, rElbowX: rig.rArm.elbow.rotation.x,
+    torsoX: rig.torso.rotation.x, torsoZ: rig.torso.rotation.z,
+    headX: rig.headGroup.rotation.x, headY: rig.headGroup.rotation.y,
+  };
+  rig.lLeg.pivot.rotation.x = lerp(g.lLegPivotX, sit.lLegPivotX, blend);
+  rig.rLeg.pivot.rotation.x = lerp(g.rLegPivotX, sit.rLegPivotX, blend);
+  rig.lLeg.pivot.rotation.z = lerp(g.lLegPivotZ, sit.lLegPivotZ, blend);
+  rig.rLeg.pivot.rotation.z = lerp(g.rLegPivotZ, sit.rLegPivotZ, blend);
+  rig.lLeg.knee.rotation.x  = lerp(g.lKneeX, sit.lKneeX, blend);
+  rig.rLeg.knee.rotation.x  = lerp(g.rKneeX, sit.rKneeX, blend);
+  rig.lArm.pivot.rotation.x = lerp(g.lArmX, sit.lArmX, blend);
+  rig.rArm.pivot.rotation.x = lerp(g.rArmX, sit.rArmX, blend);
+  rig.lArm.pivot.rotation.z = lerp(g.lArmZ, sit.lArmZ, blend);
+  rig.rArm.pivot.rotation.z = lerp(g.rArmZ, sit.rArmZ, blend);
+  rig.lArm.elbow.rotation.x = lerp(g.lElbowX, sit.lElbowX, blend);
+  rig.rArm.elbow.rotation.x = lerp(g.rElbowX, sit.rElbowX, blend);
+  rig.torso.rotation.x      = lerp(g.torsoX, sit.torsoX, blend);
+  rig.torso.rotation.z      = lerp(g.torsoZ, sit.torsoZ, blend);
+  rig.headGroup.rotation.x  = lerp(g.headX, sit.headX, blend);
+  rig.headGroup.rotation.y  = lerp(g.headY, sit.headY, blend);
+}
+
+function getMoveInput() {
+  const f = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
+  const r = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);
+  const v = new THREE.Vector3();
+  if (f || r) {
+    const fwd = new THREE.Vector3(-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw));
+    const right = new THREE.Vector3(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
+    v.addScaledVector(fwd, f).addScaledVector(right, r).normalize();
+  }
+  return v;
+}
+
+/* ==========================================================================
+   PLAYER UPDATE  —  with aggressive auto-stick wall crawl
+   ========================================================================== */
+function updatePlayer(dt) {
+  ps.time += dt;
+  ps.swingCooldown = Math.max(0, ps.swingCooldown - dt);
+  ps.wallStickTimer = Math.max(0, ps.wallStickTimer - dt);
+
+  // ============ WALL CRAWL STATE ============
+  if (ps.state === State.WALL_CRAWL) {
+    // Build wall-local basis
+    const worldUp = new THREE.Vector3(0, 1, 0);
+    const wallRight = new THREE.Vector3().crossVectors(worldUp, ps.wallNormal).normalize();
+    // wallUp = N × right → for vertical walls this is worldUp
+    const wallUp = new THREE.Vector3().crossVectors(ps.wallNormal, wallRight).normalize();
+
+    const fwdInput = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
+    const rgtInput = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);
+
+    const targetVel = new THREE.Vector3()
+      .addScaledVector(wallUp, fwdInput * CONFIG.wall.climbSpeed)
+      .addScaledVector(wallRight, rgtInput * CONFIG.wall.crawlSpeed);
+
+    ps.vel.lerp(targetVel, 1 - Math.exp(-14 * dt));
+
+    // Move
+    player.position.addScaledVector(ps.vel, dt);
+
+    // Re-detect wall & re-stick
+    const wall = findWall();
+    if (wall) {
+      ps.wallNormal.copy(wall.normal);
+      ps.wallPoint.copy(wall.point);
+      // Keep standoff distance
+      const standoff = CONFIG.wall.standoff;
+      const wallDist = player.position.clone().sub(wall.point).dot(wall.normal);
+      player.position.addScaledVector(wall.normal, standoff - wallDist);
+    } else {
+      // Lost wall — check for ground first
+      const gy = getGroundHeight(player.position.x, player.position.z);
+      if (player.position.y <= gy + 0.6) {
+        player.position.y = gy;
+        ps.state = State.GROUNDED;
+        ps.vel.set(0, 0, 0);
+      } else {
+        // Detach and fall
+        ps.state = State.AIRBORNE;
+        ps.vel.set(0, -1, 0);
+        ps.airTime = 0;
+      }
+      return;
+    }
+
+    // Reached ground while climbing down?
+    const gy = getGroundHeight(player.position.x, player.position.z);
+    if (player.position.y <= gy + 0.05) {
+      player.position.y = gy;
+      ps.state = State.GROUNDED;
+      ps.vel.set(0, 0, 0);
+      return;
+    }
+
+    // Jump off the wall
+    if (input.jump && ps.wallStickTimer <= 0) {
+      ps.state = State.AIRBORNE;
+      ps.vel.set(0, CONFIG.wall.detachJump, 0);
+      ps.vel.addScaledVector(ps.wallNormal, 5);
+      ps.airTime = 0;
+      ps.wallStickTimer = 0.4;
+      input.jump = false;
+    }
+    return;
+  }
+
+  // ============ LANDING STATE ============
+  if (ps.state === State.LANDING) {
+    ps.landTimer -= dt;
+    ps.vel.x = damp(ps.vel.x, 0, 8, dt);
+    ps.vel.z = damp(ps.vel.z, 0, 8, dt);
+    if (ps.landTimer <= 0) {
+      ps.state = State.GROUNDED;
+      ps.landTimer = 0;
+      ps.landIntensity = 0;
+    }
+    player.position.addScaledVector(ps.vel, dt);
+    collideBuildings(player.position, ps.vel, CONFIG.player.radius);
+    return;
+  }
+
+  // ============ NORMAL STATE MOVEMENT ============
+  if (App.controlsEnabled) {
+    if (ps.state === State.SWINGING) {
+      if (!input.jump) endSwing();
+    } else if (input.jump && ps.state === State.AIRBORNE && ps.airTime > CONFIG.swing.minAirTime && ps.swingCooldown <= 0) {
+      beginSwing();
+    }
+  }
+
+  const moveInput = getMoveInput();
+  const onGround = ps.state === State.GROUNDED;
+
+  if (onGround) {
+    const targetSpeed = input.sprint ? CONFIG.player.runSpeed : CONFIG.player.walkSpeed;
+    ps.vel.x = damp(ps.vel.x, moveInput.x * targetSpeed, CONFIG.player.groundFriction, dt);
+    ps.vel.z = damp(ps.vel.z, moveInput.z * targetSpeed, CONFIG.player.groundFriction, dt);
+  } else if (ps.state === State.AIRBORNE) {
+    const targetSpeed = input.sprint ? CONFIG.player.runSpeed : CONFIG.player.walkSpeed;
+    ps.vel.x += moveInput.x * targetSpeed * CONFIG.player.airControl * dt * 2.2;
+    ps.vel.z += moveInput.z * targetSpeed * CONFIG.player.airControl * dt * 2.2;
+    if (input.sprint) ps.vel.y -= 24 * dt;
+  } else if (ps.state === State.SWINGING) {
+    ps.swingTime += dt;
+    if (keys['KeyW']) ps.ropeLength = Math.max(CONFIG.swing.minRope, ps.ropeLength - CONFIG.swing.reelInSpeed * dt);
+    if (keys['KeyS']) ps.ropeLength = Math.min(CONFIG.swing.maxRope, ps.ropeLength + CONFIG.swing.reelOutSpeed * dt);
+    const fwdTangent = _v1.copy(ps.swingDir);
+    const rightTangent = _v2.crossVectors(_up, fwdTangent).normalize();
+    const pump = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
+    const steer = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);
+    ps.vel.addScaledVector(fwdTangent, pump * CONFIG.swing.pumpForce * dt);
+    ps.vel.addScaledVector(rightTangent, steer * CONFIG.swing.pumpForce * 0.55 * dt);
+    if (keys['KeyS']) ps.vel.multiplyScalar(1 - 0.55 * dt);
+  }
+
+  if (ps.state !== State.GROUNDED) {
+    const g = ps.state === State.SWINGING ? CONFIG.player.gravity * 1.06 : CONFIG.player.gravity;
+    ps.vel.y += g * dt;
+    if (ps.vel.y < CONFIG.player.maxFall) ps.vel.y = CONFIG.player.maxFall;
+  }
+
+  if (ps.state === State.SWINGING) {
+    const toAnchor = _v1.copy(ps.anchor).sub(player.position);
+    const dist = toAnchor.length();
+    const dir = toAnchor.normalize();
+    if (dist > ps.ropeLength) {
+      const overshoot = dist - ps.ropeLength;
+      player.position.addScaledVector(dir, overshoot * CONFIG.swing.ropeStiffness);
+      const radialVel = ps.vel.dot(dir);
+      if (radialVel < 0) ps.vel.addScaledVector(dir, -radialVel * CONFIG.swing.ropeDamping);
+    }
+    const tangent = _v2.copy(ps.vel).addScaledVector(dir, -ps.vel.dot(dir));
+    if (tangent.lengthSq() > 0.02) ps.swingDir.copy(tangent.normalize());
+  }
+
+  // Integrate
+  player.position.addScaledVector(ps.vel, dt);
+
+  // Collide with buildings — this stops the player at the wall face
+  collideBuildings(player.position, ps.vel, CONFIG.player.radius);
+
+  // ============ AUTO-STICK: check for wall contact ============
+  if (ps.wallStickTimer <= 0 && ps.state !== State.SWINGING) {
+    const wall = findWall();
+    if (wall) {
+      // intoWall > 0 means velocity is heading into the wall
+      const intoWall = -(wall.normal.x * ps.vel.x + wall.normal.z * ps.vel.z);
+      const isAirborne = ps.state === State.AIRBORNE && ps.airTime > 0.12;
+      const isWalkingInto = ps.state === State.GROUNDED && intoWall > 0.8;
+      const movingAwayFast = intoWall < -2.5;
+
+      if ((isAirborne && !movingAwayFast) || isWalkingInto) {
+        // Convert to wall crawl
+        ps.state = State.WALL_CRAWL;
+        ps.wallNormal.copy(wall.normal);
+        ps.wallPoint.copy(wall.point);
+
+        // Snap player to standoff distance from wall
+        const standoff = CONFIG.wall.standoff;
+        const wallDist = player.position.clone().sub(wall.point).dot(wall.normal);
+        player.position.addScaledVector(wall.normal, standoff - wallDist);
+
+        ps.vel.set(0, 0, 0);
+        return;
+      }
+    }
+  }
+
+  // ============ GROUND CHECK ============
+  const groundY = getGroundHeight(player.position.x, player.position.z);
+  if (player.position.y <= groundY + 0.001) {
+    player.position.y = groundY;
+    if (ps.vel.y <= 0) {
+      const impact = -ps.vel.y;
+      ps.vel.y = 0;
+      if (impact > 8) {
+        ps.state = State.LANDING;
+        ps.landTimer = 0.45;
+        ps.landIntensity = clamp(impact / 25, 0.35, 1.0);
+        if (impact > 12) {
+          const dmg = clamp((impact - 12) / 40, 0, 0.35);
+          suitDamage.applyDamage('legs', dmg);
+          if (impact > 30) suitDamage.applyDamage('torso', dmg * 0.5);
+        }
+      } else {
+        ps.state = State.GROUNDED;
+      }
+    }
+  } else {
+    if (ps.state === State.GROUNDED) ps.state = State.AIRBORNE;
+  }
+
+  if (player.position.y < -50) {
+    player.position.set(0, 220, 0);
+    ps.vel.set(0, 0, 0);
+    ps.state = State.AIRBORNE;
+    suitDamage.applyDamage('torso', 0.15);
+  }
+
+  if (ps.state === State.AIRBORNE) ps.airTime += dt;
+  else ps.airTime = 0;
+}
+
+let jumpEdgePrev = false;
+function handleJumpEdge() {
+  const onGround = ps.state === State.GROUNDED || ps.state === State.LANDING;
+  const pressed = input.jump && !jumpEdgePrev;
+  if (pressed && onGround) {
+    ps.vel.y = CONFIG.player.jumpForce;
+    ps.state = State.AIRBORNE;
+  }
+  jumpEdgePrev = input.jump;
+}
+
+const speedValEl = document.getElementById('speedVal');
+const vignetteEl = document.getElementById('vignette');
+const hitFlashEl = document.getElementById('hitFlash');
+const dmgReadoutEl = document.getElementById('damageReadout');
+const dmgValEl = document.getElementById('dmgVal');
+const comboReadoutEl = document.getElementById('comboReadout');
+const comboValEl = document.getElementById('comboVal');
+
+function updateUI(dt, speed) {
+  speedValEl.textContent = Math.round(speed * 3.6 * 3.4);
+  vignetteEl.style.opacity = clamp((speed - 14) / 34, 0, 1) * 0.75;
+  hitFlashEl.style.opacity = clamp(combat.hitFlash / 0.28, 0, 1) * 0.85;
+  const dmg = suitDamage.getTotal();
+  if (dmg > 0.03) {
+    dmgReadoutEl.classList.add('active');
+    dmgValEl.textContent = Math.round(dmg * 100);
+  } else {
+    dmgReadoutEl.classList.remove('active');
+  }
+  if (combat.comboTimer > 0 && combat.comboDisplay >= 2) {
+    comboReadoutEl.classList.add('show');
+    comboValEl.textContent = combat.comboDisplay;
+  } else {
+    comboReadoutEl.classList.remove('show');
+  }
+}
+
+let last = performance.now();
+
+function tick(now) {
+  requestAnimationFrame(tick);
+  const dtRaw = (now - last) / 1000;
+  last = now;
+  const dt = Math.min(dtRaw, 1 / 30);
+  const tSec = now / 1000;
+
+  snow.userData.uniforms.uTime.value = tSec;
+  snow.userData.uniforms.uCamPos.value.copy(camera.position);
+  traffic.update(dt);
+  pedestrians.update(dt, tSec);
+
+  const beacons = window.__beacons;
+  if (beacons) {
+    const on = (Math.sin(tSec * 1.6) + 1) * 0.5;
+    beacons.visible = on > 0.15;
+    beacons.material.color.setRGB(1.0, 0.1 + on * 0.3, 0.1 + on * 0.2);
+  }
+  heroRim1.position.set(player.position.x - 1.6, player.position.y + 1.4, player.position.z - 1.6);
+  heroRim2.position.set(player.position.x + 1.4, player.position.y + 0.8, player.position.z + 1.6);
+  suitDamage.update();
+
+  const rig = player.userData.rig;
+
+  if (App.mode === 'MENU') {
+    ps.time += dt;
+    animateGameplay(rig, dt, 0);
+    applySitPose(rig, dt, ps.time, 1);
+    updateMenuCamera(dt);
+    updateUI(dt, 0);
+    rig.pizzaGroup.visible = true;
+    rig.boxGroup.visible = true;
+    enemySystem.update(dt, player.position);
+  } else if (App.mode === 'TRANSITION') {
+    App.transitionT += dt;
+    App.sitBlend = clamp(1 - App.transitionT / 1.3, 0, 1);
+    ps.time += dt;
+    const roofSurfaceY = App.heroRoofY + 0.30;
+    const targetY = roofSurfaceY - 0.635 * App.sitBlend;
+    player.position.y = damp(player.position.y, targetY, 6, dt);
+    rig.pizzaGroup.visible = App.sitBlend > 0.12;
+    rig.boxGroup.visible = App.sitBlend > 0.12;
+    animateGameplay(rig, dt, 0);
+    applySitPose(rig, dt, ps.time, App.sitBlend);
+    updateCamera(dt, 0);
+    updateUI(dt, 0);
+    enemySystem.update(dt, player.position);
+    if (App.transitionT >= 1.3) {
+      App.mode = 'PLAY';
+      App.sitBlend = 0;
+      App.controlsEnabled = true;
+      ps.state = State.GROUNDED;
+      ps.vel.set(0, 0, 0);
+    }
+  } else {
+    handleJumpEdge();
+    updatePlayer(dt);
+    const speed = ps.vel.length();
+    if (ps.state === State.SWINGING) {
+      const hand = ps.handSide > 0 ? rig.rArm.hand : rig.lArm.hand;
+      const handPos = hand.getWorldPosition(_v3);
+      updateWebLine(handPos, ps.anchor);
+    } else {
+      webMesh.visible = false;
+    }
+    animateGameplay(rig, dt, speed);
+    updateCamera(dt, speed);
+    combat.update(dt, player);
+    enemySystem.update(dt, player.position);
+    updateUI(dt, speed);
+  }
+
+  composer.render();
+}
+
+requestAnimationFrame(tick);
+setTimeout(() => document.getElementById('fade').classList.add('clear'), 100);
+
+</script>
+</body>
+</html>
